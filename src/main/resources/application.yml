@@ -1,0 +1,17 @@
+spring:
+    application:
+        name: POS
+    datasource:
+        url: jdbc:mysql://localhost:3306/pos
+        username: root
+        password: root
+    jpa:
+        hibernate:
+            ddl-auto: update
+            show-sql: true
+            properties:
+                hibernate.format_sql: true
+                hibernate.transaction.jta.platform: org.hibernate.service.jta.platform.internal.NoJtaPlatform  # Add this line for No JTA platform
+springdoc:
+    swagger-ui:
+        path: /swagger-ui.html
