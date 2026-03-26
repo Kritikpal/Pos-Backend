@@ -1,6 +1,6 @@
 package com.kritik.POS.restaurant.models.response;
 
-import com.kritik.POS.restaurant.DAO.Category;
+import com.kritik.POS.restaurant.entity.Category;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

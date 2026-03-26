@@ -1,8 +1,8 @@
 package com.kritik.POS.order.repository;
 
-import com.kritik.POS.order.DAO.Order;
-import com.kritik.POS.order.DAO.enums.PaymentStatus;
-import com.kritik.POS.order.DAO.enums.PaymentType;
+import com.kritik.POS.order.entity.Order;
+import com.kritik.POS.order.entity.enums.PaymentStatus;
+import com.kritik.POS.order.entity.enums.PaymentType;
 import com.kritik.POS.order.model.response.PaymentByHour;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,6 +18,22 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     Optional<Order> findByOrderId(String orderId);
 
+    @Query("""
+    SELECT o FROM Order o
+    LEFT JOIN FETCH o.orderItemList
+    WHERE o.orderId = :id
+""")
+    Optional<Order> findByIdWithItems(String  id);
+
+    @Query("""
+    SELECT DISTINCT o FROM Order o
+    LEFT JOIN FETCH o.orderItemList oi
+    LEFT JOIN FETCH oi.menuItem
+    LEFT JOIN FETCH o.orderTaxes
+    WHERE o.orderId = :orderId
+""")
+    Optional<Order> findByOrderIdWithItems(@Param("orderId") String orderId);
+
     @Query("SELECT new com.kritik.POS.order.model.response.PaymentByHour(HOUR(o.paymentInitiatedTime), COUNT(o)) " +
             "FROM Order o " +
             "WHERE o.paymentStatus = :status " +
@@ -29,22 +45,31 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             @Param("date") LocalDate date // Use LocalDate for date parameter
     );
 
-    @Query("SELECT o FROM Order o " +
-            "WHERE (:paymentType IS NULL OR o.paymentType = :paymentType) " +
-            "AND (:paymentStatus IS NULL OR o.paymentStatus = :paymentStatus) " +
-            "AND o.lastUpdatedTime BETWEEN :startTime AND :endTime " +
-            "ORDER BY o.lastUpdatedTime DESC")
-    List<Order> findAllByPaymentTypeAndPaymentStatusAndLastUpdatedTimeBetweenOrderByLastUpdatedTimeDesc(
+
+    @Query("""
+    SELECT DISTINCT o FROM Order o
+    LEFT JOIN FETCH o.orderItemList
+    WHERE (:orderId IS NULL OR o.orderId = :orderId)
+    AND (:paymentType IS NULL OR o.paymentType = :paymentType)
+    AND (:paymentStatus IS NULL OR o.paymentStatus = :paymentStatus)
+    AND o.lastUpdatedTime BETWEEN :startTime AND :endTime
+    ORDER BY o.lastUpdatedTime DESC
+""")
+    List<Order> findAllByFilters(
+            @Param("orderId") String orderId,
             @Param("paymentType") PaymentType paymentType,
             @Param("paymentStatus") PaymentStatus paymentStatus,
             @Param("startTime") LocalDateTime startTime,
             @Param("endTime") LocalDateTime endTime
     );
 
-
-    @Query("SELECT o FROM Order o WHERE o.paymentStatus = :status ORDER BY o.lastUpdatedTime DESC")
+    @Query("""
+    SELECT DISTINCT o FROM Order o
+    LEFT JOIN FETCH o.orderItemList
+    WHERE o.paymentStatus = :status
+    ORDER BY o.lastUpdatedTime DESC
+""")
     List<Order> findLastOrders(@Param("status") PaymentStatus status, Pageable pageable);
-
 
     long countByPaymentStatusAndLastUpdatedTimeBetween(PaymentStatus paymentStatus,LocalDateTime startTime,LocalDateTime endTime);
     long countByPaymentTypeAndLastUpdatedTimeBetween(PaymentType paymentType,LocalDateTime startTime,LocalDateTime endTime);

@@ -1,8 +1,8 @@
 package com.kritik.POS.order.util;
 
-import com.kritik.POS.order.DAO.Order;
-import com.kritik.POS.order.DAO.OrderTax;
-import com.kritik.POS.order.DAO.SaleItem;
+import com.kritik.POS.order.entity.Order;
+import com.kritik.POS.order.entity.OrderTax;
+import com.kritik.POS.order.entity.SaleItem;
 
 public class OrderUtil {
     public static Double getTotalPrice(Order order) {

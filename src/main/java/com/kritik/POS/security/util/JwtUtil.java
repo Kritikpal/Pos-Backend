@@ -14,14 +14,14 @@ public class JwtUtil {
 
     private static final String SECRET_KEY = "dskjdvslcbvbsjdcskjdhsgdaihsvdhhefy8377892u3esnbcnc";
 
-    public String generateToken(String userName, Map<String ,Object> claims, Long expTimeInMilliSecond) {
+    public String generateToken(String userName, Map<String, Object> claims, Long expTimeInMilliSecond) {
 
         Date startTime = new Date(System.currentTimeMillis());
         SecretKey secretKey = Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
         return Jwts.builder()
                 .signWith(secretKey)
                 .claims(claims)
-                .issuer("Kritik Pal")
+                .issuer("Pos-By-KP")
                 .subject(userName)
                 .issuedAt(startTime)
                 .expiration(new Date(expTimeInMilliSecond))
@@ -29,6 +29,10 @@ public class JwtUtil {
     }
 
     private static Claims getClaims(String token) {
+        return getClaimsFormToken(token);
+    }
+
+    private static Claims getClaimsFormToken(String token) {
         try {
             SecretKey secretKey = Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
             JwtParser parser = Jwts.parser()
@@ -46,6 +50,9 @@ public class JwtUtil {
         return claimsResolver.apply(claims);
     }
 
+    public Claims extractAllClaims(String token) {
+        return getClaimsFormToken(token);
+    }
 
     public String getUserName(String token) throws JwtException {
         return getClaims(token).getSubject();

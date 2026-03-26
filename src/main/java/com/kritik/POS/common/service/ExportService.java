@@ -1,9 +1,9 @@
 package com.kritik.POS.common.service;
 
 import com.kritik.POS.exception.errors.AppException;
-import com.kritik.POS.restaurant.DAO.Category;
-import com.kritik.POS.restaurant.DAO.MenuItem;
-import com.kritik.POS.restaurant.DAO.RestaurantTable;
+import com.kritik.POS.restaurant.entity.Category;
+import com.kritik.POS.restaurant.entity.MenuItem;
+import com.kritik.POS.restaurant.entity.RestaurantTable;
 
 import java.util.List;
 

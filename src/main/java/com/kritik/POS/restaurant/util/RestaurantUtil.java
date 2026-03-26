@@ -1,6 +1,6 @@
 package com.kritik.POS.restaurant.util;
 
-import com.kritik.POS.restaurant.DAO.ItemPrice;
+import com.kritik.POS.restaurant.entity.ItemPrice;
 
 public class RestaurantUtil {
     public static Double getMenuItemPrice(ItemPrice itemPrice) {

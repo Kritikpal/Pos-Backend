@@ -7,8 +7,8 @@ import com.kritik.POS.admin.models.response.ShortReport;
 import com.kritik.POS.admin.route.AdminRoute;
 import com.kritik.POS.admin.service.AdminPaymentService;
 import com.kritik.POS.common.model.ApiResponse;
-import com.kritik.POS.order.DAO.enums.PaymentStatus;
-import com.kritik.POS.order.DAO.enums.PaymentType;
+import com.kritik.POS.order.entity.enums.PaymentStatus;
+import com.kritik.POS.order.entity.enums.PaymentType;
 import com.kritik.POS.order.model.response.PaymentByHour;
 import com.kritik.POS.restaurant.models.response.StockReport;
 import com.kritik.POS.restaurant.service.StockService;
@@ -20,8 +20,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.Date;
 import java.util.List;
 
 import static com.kritik.POS.admin.route.AdminRoute.*;
@@ -77,7 +75,7 @@ public class AdminController {
 
     @GetMapping(GET_ENDING_STOCK)
     public ResponseEntity<ApiResponse<List<StockReport>>> getEndingStocks(@RequestParam(name = "limit", required = false, defaultValue = "5") Integer limit) {
-        List<StockReport> last5Payments = stockService.getALlStocks("", 5);
+        List<StockReport> last5Payments = stockService.getALlStocks("", limit);
         return ResponseEntity.ok(ApiResponse.SUCCESS(last5Payments));
     }
 

@@ -1,6 +1,6 @@
 package com.kritik.POS.restaurant.repository;
 
-import com.kritik.POS.restaurant.DAO.Category;
+import com.kritik.POS.restaurant.entity.Category;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

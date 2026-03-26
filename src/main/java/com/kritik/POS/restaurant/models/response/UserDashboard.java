@@ -1,7 +1,7 @@
 package com.kritik.POS.restaurant.models.response;
 
-import com.kritik.POS.restaurant.DAO.MenuItem;
-import com.kritik.POS.tax.TaxRate;
+import com.kritik.POS.restaurant.entity.MenuItem;
+import com.kritik.POS.tax.entity.TaxRate;
 import lombok.Data;
 import lombok.Getter;
 
@@ -35,7 +35,7 @@ public class UserDashboard {
         private final Double itemPrice;
         private final Boolean isAvailable;
         private final Boolean isTrending;
-        private final Integer maxLimit;
+        private final Integer totalStockAvailable;
 
         public DashBoardItem(MenuItem menuItem) {
             this.id = menuItem.getId();
@@ -45,7 +45,7 @@ public class UserDashboard {
             this.isAvailable = menuItem.getIsAvailable();
             this.isTrending = menuItem.getIsTrending();
             this.categoryName = menuItem.getCategory().getCategoryName();
-            this.maxLimit = menuItem.getItemStock().getTotalStock();
+            this.totalStockAvailable = menuItem.getItemStock().getTotalStock();
         }
     }
 

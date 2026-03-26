@@ -1,29 +1,30 @@
 package com.kritik.POS.order.service.Impl;
 
+import com.kritik.POS.events.OrderCompletedEvent;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.exception.errors.OrderException;
-import com.kritik.POS.order.DAO.Order;
-import com.kritik.POS.order.DAO.OrderTax;
-import com.kritik.POS.order.DAO.SaleItem;
-import com.kritik.POS.tax.TaxRate;
-import com.kritik.POS.order.DAO.enums.PaymentStatus;
-import com.kritik.POS.order.DAO.enums.PaymentType;
+import com.kritik.POS.order.entity.Order;
+import com.kritik.POS.order.entity.OrderTax;
+import com.kritik.POS.order.entity.SaleItem;
+import com.kritik.POS.tax.entity.TaxRate;
+import com.kritik.POS.order.entity.enums.PaymentStatus;
+import com.kritik.POS.order.entity.enums.PaymentType;
 import com.kritik.POS.order.model.response.PaymentProcessingResponse;
 import com.kritik.POS.order.model.request.InitiateOrderRequest;
 import com.kritik.POS.order.repository.OrderRepository;
-import com.kritik.POS.tax.TaxRateRepository;
 import com.kritik.POS.order.service.OrderService;
 import com.kritik.POS.order.util.OrderUtil;
-import com.kritik.POS.restaurant.DAO.ItemStock;
-import com.kritik.POS.restaurant.DAO.MenuItem;
+import com.kritik.POS.restaurant.entity.ItemStock;
+import com.kritik.POS.restaurant.entity.MenuItem;
 import com.kritik.POS.restaurant.models.request.StockRequest;
 import com.kritik.POS.restaurant.repository.MenuItemRepository;
 import com.kritik.POS.restaurant.repository.StockRepository;
 import com.kritik.POS.restaurant.service.StockService;
 import com.kritik.POS.restaurant.util.RestaurantUtil;
-import com.kritik.POS.tax.TaxService;
+import com.kritik.POS.tax.service.TaxService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -40,15 +41,16 @@ public class OrderServiceImpl implements OrderService {
     private final StockRepository stockRepository;
     private final StockService stockService;
     private final TaxService taxService;
-
+    private final ApplicationEventPublisher eventPublisher;
 
     @Autowired
-    public OrderServiceImpl(OrderRepository orderRepository, MenuItemRepository menuItemRepository, StockRepository stockRepository, StockService stockService, TaxService taxService) {
+    public OrderServiceImpl(OrderRepository orderRepository, MenuItemRepository menuItemRepository, StockRepository stockRepository, StockService stockService, TaxService taxService, ApplicationEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
         this.menuItemRepository = menuItemRepository;
         this.stockRepository = stockRepository;
         this.stockService = stockService;
         this.taxService = taxService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -144,6 +146,7 @@ public class OrderServiceImpl implements OrderService {
             }
         }
         stockRepository.saveAll(itemStocks);
+        eventPublisher.publishEvent(new OrderCompletedEvent(savedOrder.getOrderId()));
         return new PaymentProcessingResponse(
                 savedOrder,
                 "Thank You!",

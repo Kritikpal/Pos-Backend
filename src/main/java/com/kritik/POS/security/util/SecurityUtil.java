@@ -2,7 +2,7 @@ package com.kritik.POS.security.util;
 
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.security.models.SecurityUser;
-import com.kritik.POS.user.DAO.User;
+import com.kritik.POS.user.entity.User;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -23,12 +23,5 @@ public class SecurityUtil {
         throw new AppException("User not present in the context", HttpStatus.CONFLICT);
     }
 
-    public static void setSecurityContent(User user, HttpServletRequest request) {
-        SecurityUser securityUser = new SecurityUser(user);
-        final UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
-                securityUser, user, securityUser.getAuthorities());
 
-        authenticationToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-        SecurityContextHolder.getContext().setAuthentication(authenticationToken);
-    }
 }

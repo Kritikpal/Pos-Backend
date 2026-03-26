@@ -2,7 +2,8 @@ package com.kritik.POS.security.config;
 
 import com.kritik.POS.security.entryPoint.JWTEntryPoint;
 import com.kritik.POS.security.filter.JwtFilter;
-import com.kritik.POS.user.service.UserService;
+import com.kritik.POS.user.service.AuthService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,6 +11,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
@@ -21,30 +23,30 @@ import static com.kritik.POS.user.model.enums.UserRole.STORE_OWNER;
 
 @EnableWebSecurity
 @Configuration
+@RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final UserService userService;
+    private final JWTEntryPoint jwtEntryPoint;
+    private final JwtFilter jwtFilter;
 
-    @Autowired
-    public SecurityConfig(UserService userService) {
-        this.userService = userService;
-    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
 
         httpSecurity
                 .authorizeHttpRequests(request -> request
-                        .requestMatchers("/store/**").hasAnyAuthority(STAFF.name(),STORE_OWNER.name())
+                        .requestMatchers("/store/**").hasAnyAuthority(STAFF.name(), STORE_OWNER.name())
                         .requestMatchers("/store-owner/**").hasAnyAuthority(STORE_OWNER.name())
                         .anyRequest().permitAll())
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
-                .exceptionHandling(exceptionHandlingConfigurer ->
-                        exceptionHandlingConfigurer.authenticationEntryPoint(entryPoint())) // Custom entry point
-                .addFilterBefore(jwtFilter(), UsernamePasswordAuthenticationFilter.class); // Adding JWT filter
-
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class) // Adding JWT filter
+                .exceptionHandling(ex ->
+                        ex.authenticationEntryPoint(jwtEntryPoint)) // Custom entry point
+                .sessionManagement(session ->
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                );
         return httpSecurity.build();
     }
 
@@ -67,21 +69,11 @@ public class SecurityConfig {
             public void addCorsMappings(CorsRegistry registry) {
                 registry.addMapping("/**")
                         .allowedOriginPatterns("*")
-                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS","PATCH")
+                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
                         .allowedHeaders("*")
                         .allowCredentials(true);
             }
         };
     }
 
-    JWTEntryPoint entryPoint() {
-        return new JWTEntryPoint();
-    }
-
-    JwtFilter jwtFilter() {
-        return new JwtFilter(
-                userService,
-                entryPoint()
-        );
-    }
 }

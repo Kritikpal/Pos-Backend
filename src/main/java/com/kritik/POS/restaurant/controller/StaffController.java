@@ -1,7 +1,7 @@
 package com.kritik.POS.restaurant.controller;
 
 import com.kritik.POS.common.model.ApiResponse;
-import com.kritik.POS.restaurant.DAO.RestaurantTable;
+import com.kritik.POS.restaurant.entity.RestaurantTable;
 import com.kritik.POS.restaurant.models.request.CategoryRequest;
 import com.kritik.POS.restaurant.models.request.ItemRequest;
 import com.kritik.POS.restaurant.models.request.TableRequest;
@@ -13,6 +13,7 @@ import com.kritik.POS.swagger.SwaggerTags;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -45,11 +46,15 @@ public class StaffController {
     }
 
     @Tag(name = SwaggerTags.MENU_ITEM)
-    @PostMapping(RestaurantRoute.EDIT_ADD_MENU_ITEM)
-    public ResponseEntity<ApiResponse<MenuResponse>> editMenuItem(@RequestBody ItemRequest itemRequest,
-
-                                                                  @RequestParam(required = false) MultipartFile productImage) {
-        MenuResponse savedMenuItem = restaurantService.addEditMenuItem(itemRequest,productImage);
+    @PostMapping(
+            value = RestaurantRoute.EDIT_ADD_MENU_ITEM,
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<ApiResponse<MenuResponse>> editMenuItem(
+            @RequestPart("itemRequest") ItemRequest itemRequest,
+            @RequestPart(value = "productImage", required = false) MultipartFile productImage
+    ){
+        MenuResponse savedMenuItem = restaurantService.addEditMenuItem(itemRequest, productImage);
         return ResponseEntity.ok(ApiResponse.SUCCESS(savedMenuItem));
     }
 

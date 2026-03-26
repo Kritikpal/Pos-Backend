@@ -1,7 +1,7 @@
 package com.kritik.POS.admin.service;
 
 import com.kritik.POS.exception.errors.AppException;
-import com.kritik.POS.restaurant.DAO.RestaurantTable;
+import com.kritik.POS.restaurant.entity.RestaurantTable;
 import com.kritik.POS.restaurant.models.request.ItemRequest;
 import com.kritik.POS.restaurant.models.request.TableRequest;
 import com.kritik.POS.restaurant.models.response.MenuResponse;

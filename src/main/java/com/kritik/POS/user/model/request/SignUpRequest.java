@@ -18,6 +18,6 @@ public class SignUpRequest {
     @Pattern(regexp = "^[0-9]{10}$",message = "This is not a valid phone number, Phone number must contain only digits and must be of 10 digits long")
     private final String phoneNumber;
 
-    private final UserRole userRole;
+    private final String userRole;
 
 }

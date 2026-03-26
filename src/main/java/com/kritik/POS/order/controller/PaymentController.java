@@ -1,7 +1,7 @@
 package com.kritik.POS.order.controller;
 
 import com.kritik.POS.common.model.ApiResponse;
-import com.kritik.POS.order.DAO.enums.PaymentType;
+import com.kritik.POS.order.entity.enums.PaymentType;
 import com.kritik.POS.order.model.response.PaymentProcessingResponse;
 import com.kritik.POS.order.model.request.InitiateOrderRequest;
 import com.kritik.POS.order.service.OrderService;

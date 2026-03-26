@@ -7,6 +7,7 @@ import com.kritik.POS.swagger.SwaggerTags;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,14 +25,16 @@ public class DashboardController {
     }
 
     @Tag(name = SwaggerTags.DASHBOARD)
-    @RequestMapping(GET_RESTAURANT_DASHBOARD)
+    @GetMapping(GET_RESTAURANT_DASHBOARD)
     public ResponseEntity<ApiResponse<UserDashboard>> userDashboard(
-            @RequestParam(name = "pageNumber", defaultValue = "1", required = false) Integer pageNumber,
-            @RequestParam(name = "limit", defaultValue = "10", required = false) Integer pageSize,
-            @RequestParam(name = "q", defaultValue = "", required = false) String searchString,
-            @RequestParam(name = "categoryName", defaultValue = "0", required = false) Long categoryId
+            @RequestParam(defaultValue = "1") Integer pageNumber,
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            @RequestParam(defaultValue = "") String searchString,
+            @RequestParam(required = false) Long categoryId
     ) {
-        UserDashboard userDashboard = restaurantService.userDashboard(pageNumber - 1, pageSize, searchString, categoryId);
+        UserDashboard userDashboard =
+                restaurantService.userDashboard(pageNumber - 1, pageSize, searchString, categoryId);
+
         return ResponseEntity.ok(ApiResponse.SUCCESS(userDashboard));
     }
 }

@@ -4,8 +4,8 @@ import com.kritik.POS.admin.models.response.LastOrderListItem;
 import com.kritik.POS.admin.models.response.MostOrderedMenu;
 import com.kritik.POS.admin.models.response.OrderResponse;
 import com.kritik.POS.admin.models.response.ShortReport;
-import com.kritik.POS.order.DAO.enums.PaymentStatus;
-import com.kritik.POS.order.DAO.enums.PaymentType;
+import com.kritik.POS.order.entity.enums.PaymentStatus;
+import com.kritik.POS.order.entity.enums.PaymentType;
 import com.kritik.POS.order.model.response.PaymentByHour;
 
 import java.time.LocalDate;

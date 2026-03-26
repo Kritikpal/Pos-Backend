@@ -6,21 +6,35 @@ import com.kritik.POS.common.model.ApiResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.stereotype.Component;
 
+import java.awt.*;
 import java.io.IOException;
 
+@Component
 public class JWTEntryPoint implements AuthenticationEntryPoint {
     @Override
-    public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException exception) throws IOException, ServletException {
+    public void commence(HttpServletRequest request,
+                         HttpServletResponse response,
+                         AuthenticationException exception) throws IOException {
 
         ObjectMapper objectMapper = new ObjectMapper();
-        ApiResponse<String> apiResponse = new ApiResponse<>("", ResponseCode.UNAUTHORIZED, exception.getMessage());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+
+        ApiResponse<String> apiResponse = new ApiResponse<>(
+                "Unauthorized",
+                ResponseCode.UNAUTHORIZED,
+                exception.getMessage()
+        );
+
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
-        response.getOutputStream().println(objectMapper.writeValueAsString(apiResponse));
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+
+        response.getWriter().write(objectMapper.writeValueAsString(apiResponse));
+        response.getWriter().flush();
     }
 }

@@ -12,6 +12,6 @@ import java.util.List;
 public interface CsvService {
      List<ItemRequest> readProductsFromCsv() throws AppException, CsvValidationException, IOException;
      List<CategoryRequest> readCategoriesFromCsv() throws AppException, CsvValidationException, IOException;
-     List<TableRequest> readTablesFromCsv() throws AppException, CsvValidationException;
+     List<TableRequest> readTablesFromCsv() throws AppException, CsvValidationException, IOException;
 
 }

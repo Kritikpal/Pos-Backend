@@ -2,12 +2,12 @@ package com.kritik.POS.restaurant.service.Impl;
 
 import com.kritik.POS.common.service.FileUploadService;
 import com.kritik.POS.exception.errors.AppException;
-import com.kritik.POS.order.DAO.SaleItem;
+import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.order.repository.SaleItemRepository;
-import com.kritik.POS.restaurant.DAO.Category;
-import com.kritik.POS.restaurant.DAO.MenuItem;
-import com.kritik.POS.restaurant.DAO.ProductFile;
-import com.kritik.POS.restaurant.DAO.RestaurantTable;
+import com.kritik.POS.restaurant.entity.Category;
+import com.kritik.POS.restaurant.entity.MenuItem;
+import com.kritik.POS.restaurant.entity.ProductFile;
+import com.kritik.POS.restaurant.entity.RestaurantTable;
 import com.kritik.POS.restaurant.models.request.CategoryRequest;
 import com.kritik.POS.restaurant.models.request.ItemRequest;
 import com.kritik.POS.restaurant.models.request.TableRequest;
@@ -18,10 +18,13 @@ import com.kritik.POS.restaurant.repository.CategoryRepository;
 import com.kritik.POS.restaurant.repository.MenuItemRepository;
 import com.kritik.POS.restaurant.repository.RestaurantTableRepository;
 import com.kritik.POS.restaurant.service.RestaurantService;
-import com.kritik.POS.tax.TaxRate;
-import com.kritik.POS.tax.TaxRateRepository;
+import com.kritik.POS.tax.entity.TaxRate;
+import com.kritik.POS.tax.repository.TaxRateRepository;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -49,10 +52,17 @@ public class RestaurantServiceImpl implements RestaurantService {
     }
 
     @Override
-    public UserDashboard userDashboard(Integer pageNumber, Integer pageSize, String searchString, Long categoryId) throws AppException {
-        List<TaxRate> allByIsActiveTrue = taxRateRepository.findAllByIsActiveTrue();
-        List<MenuItem> allByIsActiveOrderByIsTrendingDesc = menuItemRepository.findAllByIsActiveOrderByIsTrendingDesc(true);
-        return new UserDashboard(allByIsActiveOrderByIsTrendingDesc, allByIsActiveTrue);
+    public UserDashboard userDashboard(Integer pageNumber, Integer pageSize,
+                                       String searchString, Long categoryId) {
+
+        Pageable pageable = PageRequest.of(pageNumber, pageSize);
+
+        Page<MenuItem> menuItems =
+                menuItemRepository.searchDashboardItems(searchString, categoryId, pageable);
+
+        List<TaxRate> taxes = taxRateRepository.findAllByIsActiveTrue();
+
+        return new UserDashboard(menuItems.getContent(), taxes);
     }
 
     @Override

@@ -2,7 +2,7 @@ package com.kritik.POS.restaurant.service.Impl;
 
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.exception.errors.StockException;
-import com.kritik.POS.restaurant.DAO.ItemStock;
+import com.kritik.POS.restaurant.entity.ItemStock;
 import com.kritik.POS.restaurant.models.request.StockRequest;
 import com.kritik.POS.restaurant.models.response.StockReport;
 import com.kritik.POS.restaurant.repository.StockRepository;

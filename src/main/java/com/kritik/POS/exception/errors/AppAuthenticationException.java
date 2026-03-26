@@ -8,8 +8,5 @@ public class AppAuthenticationException extends AuthenticationException {
         super(message);
     }
 
-    public AppAuthenticationException(String msg, Throwable cause) {
-        super(msg, cause);
-    }
 
 }

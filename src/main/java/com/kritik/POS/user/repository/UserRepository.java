@@ -1,6 +1,6 @@
 package com.kritik.POS.user.repository;
 
-import com.kritik.POS.user.DAO.User;
+import com.kritik.POS.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;

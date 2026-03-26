@@ -1,8 +1,8 @@
 package com.kritik.POS.security.models;
 
 
-import com.kritik.POS.user.DAO.User;
-import com.kritik.POS.user.model.enums.UserRole;
+import com.kritik.POS.user.entity.Role;
+import com.kritik.POS.user.entity.User;
 import lombok.Data;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -11,26 +11,33 @@ import org.springframework.security.core.userdetails.UserDetails;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Data
 public class SecurityUser implements UserDetails {
 
     private final String email;
     private final String password;
-    private final UserRole role;
+    private final Long restaurantId;
+    private final Long chainId;
+    private final Set<String> roles;
 
-    public SecurityUser(User user) {
-        this.email = user.getEmail();
-        this.password = user.getPassword();
-        this.role = user.getUserRole();
+
+    public SecurityUser(String username, Long restaurantId, Long chainId, Set<String> roles, String token) {
+        this.email = username;
+        this.password = token;
+        this.chainId = chainId;
+        this.restaurantId = restaurantId;
+        this.roles = roles;
     }
 
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        List<GrantedAuthority> authorities = new ArrayList<>();
-        authorities.add(new SimpleGrantedAuthority(role.name()));
-        return authorities;
+        return roles.stream()
+                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
+                .toList();
     }
 
     @Override
@@ -61,5 +68,26 @@ public class SecurityUser implements UserDetails {
     @Override
     public boolean isEnabled() {
         return true;
+    }
+
+    public boolean hasRole(String roleName) {
+        return roles.stream()
+                .anyMatch(role -> role.equalsIgnoreCase(roleName));
+    }
+
+    public boolean isSuperAdmin() {
+        return hasRole("SUPER_ADMIN");
+    }
+
+    public boolean isChainAdmin() {
+        return hasRole("CHAIN_ADMIN");
+    }
+
+    public boolean isRestaurantAdmin() {
+        return hasRole("RESTAURANT_ADMIN");
+    }
+
+    public boolean isStaff() {
+        return hasRole("STAFF");
     }
 }

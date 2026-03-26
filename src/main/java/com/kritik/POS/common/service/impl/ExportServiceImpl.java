@@ -2,9 +2,9 @@ package com.kritik.POS.common.service.impl;
 
 import com.kritik.POS.common.service.ExportService;
 import com.kritik.POS.exception.errors.AppException;
-import com.kritik.POS.restaurant.DAO.Category;
-import com.kritik.POS.restaurant.DAO.MenuItem;
-import com.kritik.POS.restaurant.DAO.RestaurantTable;
+import com.kritik.POS.restaurant.entity.Category;
+import com.kritik.POS.restaurant.entity.MenuItem;
+import com.kritik.POS.restaurant.entity.RestaurantTable;
 import com.opencsv.CSVWriter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ResourceLoader;

@@ -1,8 +1,8 @@
 package com.kritik.POS.restaurant.models.response;
 
-import com.kritik.POS.restaurant.DAO.ItemPrice;
-import com.kritik.POS.restaurant.DAO.ItemStock;
-import com.kritik.POS.restaurant.DAO.MenuItem;
+import com.kritik.POS.restaurant.entity.ItemPrice;
+import com.kritik.POS.restaurant.entity.ItemStock;
+import com.kritik.POS.restaurant.entity.MenuItem;
 import com.kritik.POS.restaurant.util.RestaurantUtil;
 import lombok.Data;
 

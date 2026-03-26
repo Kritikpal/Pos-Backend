@@ -1,8 +1,8 @@
 package com.kritik.POS.order.repository;
 
 import com.kritik.POS.admin.models.response.MostOrderedMenu;
-import com.kritik.POS.order.DAO.SaleItem;
-import com.kritik.POS.order.DAO.enums.PaymentStatus;
+import com.kritik.POS.order.entity.SaleItem;
+import com.kritik.POS.order.entity.enums.PaymentStatus;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

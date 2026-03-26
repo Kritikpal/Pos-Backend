@@ -7,14 +7,13 @@ import com.kritik.POS.admin.models.response.ShortReport;
 import com.kritik.POS.admin.service.AdminPaymentService;
 import com.kritik.POS.common.util.StoreUtil;
 import com.kritik.POS.exception.errors.AppException;
-import com.kritik.POS.order.DAO.Order;
-import com.kritik.POS.order.DAO.enums.PaymentStatus;
-import com.kritik.POS.order.DAO.enums.PaymentType;
+import com.kritik.POS.order.entity.Order;
+import com.kritik.POS.order.entity.enums.PaymentStatus;
+import com.kritik.POS.order.entity.enums.PaymentType;
 import com.kritik.POS.order.model.response.PaymentByHour;
 import com.kritik.POS.order.repository.OrderRepository;
 import com.kritik.POS.order.repository.SaleItemRepository;
 import com.kritik.POS.restaurant.repository.MenuItemRepository;
-import org.attoparser.util.TextUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -47,8 +46,13 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
         if (endDate == null) {
             endDate = LocalDate.now();
         }
-        return orderRepository.findAllByPaymentTypeAndPaymentStatusAndLastUpdatedTimeBetweenOrderByLastUpdatedTimeDesc
-                        (paymentType, paymentStatus,
+
+        if (orderId == null || orderId.isBlank()) {
+            orderId = null;
+        }
+
+        return orderRepository.findAllByFilters
+                        (orderId, paymentType, paymentStatus,
                                 startDate.atTime(StoreUtil.STORE_OPEN_TIME), endDate.atTime(StoreUtil.STORE_CLOSE_TIME))
                 .stream().map(OrderResponse::buildObjectFromOrder).toList();
 

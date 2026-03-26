@@ -1,8 +1,8 @@
 package com.kritik.POS.admin.models.response;
 
-import com.kritik.POS.order.DAO.Order;
-import com.kritik.POS.order.DAO.SaleItem;
-import com.kritik.POS.order.DAO.enums.PaymentType;
+import com.kritik.POS.order.entity.Order;
+import com.kritik.POS.order.entity.SaleItem;
+import com.kritik.POS.order.entity.enums.PaymentType;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
