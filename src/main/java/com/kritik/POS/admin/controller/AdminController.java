@@ -4,7 +4,6 @@ import static com.kritik.POS.admin.route.AdminRoute.GET_ENDING_STOCK;
 import static com.kritik.POS.admin.route.AdminRoute.GET_LAST5_PAYMENTS;
 import static com.kritik.POS.admin.route.AdminRoute.MOST_ORDERED_ITEM;
 
-import com.kritik.POS.admin.models.response.LastOrderListItem;
 import com.kritik.POS.admin.models.response.MostOrderedMenu;
 import com.kritik.POS.admin.models.response.OrderResponse;
 import com.kritik.POS.admin.models.response.ShortReport;
@@ -13,6 +12,7 @@ import com.kritik.POS.admin.service.AdminPaymentService;
 import com.kritik.POS.common.model.ApiResponse;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
+import com.kritik.POS.order.model.response.LastOrderListItemProjection;
 import com.kritik.POS.order.model.response.PaymentByHour;
 import com.kritik.POS.restaurant.models.response.StockReport;
 import com.kritik.POS.restaurant.service.StockService;
@@ -66,8 +66,8 @@ public class AdminController {
     }
 
     @GetMapping(GET_LAST5_PAYMENTS)
-    public ResponseEntity<ApiResponse<List<LastOrderListItem>>> getLat5Payments() {
-        List<LastOrderListItem> last5Payments = adminPaymentService.getLast5Payments();
+    public ResponseEntity<ApiResponse<List<LastOrderListItemProjection>>> getLat5Payments() {
+        List<LastOrderListItemProjection> last5Payments = adminPaymentService.getLast5Payments();
         return ResponseEntity.ok(ApiResponse.SUCCESS(last5Payments));
     }
 

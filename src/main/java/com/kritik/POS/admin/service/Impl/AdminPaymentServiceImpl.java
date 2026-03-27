@@ -1,15 +1,14 @@
 package com.kritik.POS.admin.service.Impl;
 
-import com.kritik.POS.admin.models.response.LastOrderListItem;
 import com.kritik.POS.admin.models.response.MostOrderedMenu;
 import com.kritik.POS.admin.models.response.OrderResponse;
 import com.kritik.POS.admin.models.response.ShortReport;
 import com.kritik.POS.admin.service.AdminPaymentService;
 import com.kritik.POS.common.util.StoreUtil;
 import com.kritik.POS.exception.errors.AppException;
-import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
+import com.kritik.POS.order.model.response.LastOrderListItemProjection;
 import com.kritik.POS.order.model.response.PaymentByHour;
 import com.kritik.POS.order.repository.OrderRepository;
 import com.kritik.POS.order.repository.SaleItemRepository;
@@ -20,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -105,8 +105,8 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
                 localDate.atTime(StoreUtil.STORE_OPEN_TIME),
                 localDate.atTime(StoreUtil.STORE_CLOSE_TIME)
         );
-        List<Order> lastOrders = orderRepository.findLastOrders(
-                PaymentStatus.PAYMENT_SUCCESSFUL,
+        List<LastOrderListItemProjection> lastOrders = orderRepository.findLastOrders(
+                4,
                 tenantAccessService.isSuperAdmin(),
                 tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
                 PageRequest.of(0, 1)
@@ -123,33 +123,43 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
 
     @Override
     public List<PaymentByHour> getHourlyPaymentReport() {
-        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+
+        List<Long> accessibleRestaurantIds =
+                tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+
+        LocalDate today = LocalDate.now();
+        LocalDateTime start = today.atStartOfDay();
+        LocalDateTime end = today.plusDays(1).atStartOfDay();
+
         List<PaymentByHour> paymentByHours = orderRepository.countPaymentsByHour(
                 PaymentStatus.PAYMENT_SUCCESSFUL,
                 tenantAccessService.isSuperAdmin(),
                 tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
-                LocalDate.now()
+                start,
+                end
         );
+
         Map<Integer, PaymentByHour> paymentByHourMap = paymentByHours.stream()
                 .collect(Collectors.toMap(PaymentByHour::getHourOfDay, p -> p));
+
         List<PaymentByHour> response = new ArrayList<>(24);
+
         for (int i = 0; i < 24; i++) {
-            PaymentByHour paymentByHour = paymentByHourMap.getOrDefault(i, new PaymentByHour(i, 0L));
-            response.add(paymentByHour);
+            response.add(paymentByHourMap.getOrDefault(i, new PaymentByHour(i, 0L)));
         }
+
         return response;
     }
 
     @Override
-    public List<LastOrderListItem> getLast5Payments() {
+    public List<LastOrderListItemProjection> getLast5Payments() {
         List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
-        List<Order> lastOrders = orderRepository.findLastOrders(
-                PaymentStatus.PAYMENT_SUCCESSFUL,
+        return orderRepository.findLastOrders(
+                4,
                 tenantAccessService.isSuperAdmin(),
                 tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
                 PageRequest.of(0, 5)
         );
-        return lastOrders.stream().map(LastOrderListItem::new).toList();
     }
 
     @Override

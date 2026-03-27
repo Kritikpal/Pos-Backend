@@ -3,6 +3,7 @@ package com.kritik.POS.order.repository;
 import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
+import com.kritik.POS.order.model.response.LastOrderListItemProjection;
 import com.kritik.POS.order.model.response.PaymentByHour;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -38,19 +39,26 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     Optional<Order> findByOrderIdWithItems(@Param("orderId") String orderId);
 
     @Query("""
-            SELECT new com.kritik.POS.order.model.response.PaymentByHour(HOUR(o.paymentInitiatedTime), COUNT(o))
-            FROM Order o
-            WHERE o.paymentStatus = :status
-              AND (:skipRestaurantFilter = true OR o.restaurantId IN :restaurantIds)
-              AND o.isDeleted = false
-              AND DATE(o.paymentInitiatedTime) = :date
-            GROUP BY HOUR(o.paymentInitiatedTime)
-            ORDER BY HOUR(o.paymentInitiatedTime)
-            """)
-    List<PaymentByHour> countPaymentsByHour(@Param("status") PaymentStatus paymentStatus,
-                                            @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
-                                            @Param("restaurantIds") Collection<Long> restaurantIds,
-                                            @Param("date") LocalDate date);
+    SELECT new com.kritik.POS.order.model.response.PaymentByHour(
+        EXTRACT(HOUR FROM o.paymentInitiatedTime),
+        COUNT(o.id)
+    )
+    FROM Order o
+    WHERE o.paymentStatus = :status
+      AND (:skipRestaurantFilter = true OR o.restaurantId IN :restaurantIds)
+      AND o.isDeleted = false
+      AND o.paymentInitiatedTime >= :start
+      AND o.paymentInitiatedTime < :end
+    GROUP BY EXTRACT(HOUR FROM o.paymentInitiatedTime)
+    ORDER BY EXTRACT(HOUR FROM o.paymentInitiatedTime)
+""")
+    List<PaymentByHour> countPaymentsByHour(
+            @Param("status") PaymentStatus paymentStatus,
+            @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+            @Param("restaurantIds") Collection<Long> restaurantIds,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end
+    );
 
 
     @Query("""
@@ -73,18 +81,40 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                  @Param("endTime") LocalDateTime endTime,
                                  Pageable pageable);
 
-    @Query("""
-            SELECT o FROM Order o
-            WHERE o.paymentStatus = :status
-              AND (:skipRestaurantFilter = true OR o.restaurantId IN :restaurantIds)
-              AND o.isDeleted = false
-            ORDER BY o.lastUpdatedTime DESC
-            """)
-    List<Order> findLastOrders(@Param("status") PaymentStatus status,
-                               @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
-                               @Param("restaurantIds") Collection<Long> restaurantIds,
-                               Pageable pageable);
+//    @Query("""
+//            SELECT o FROM Order o
+//            WHERE o.paymentStatus = :status
+//              AND (:skipRestaurantFilter = true OR o.restaurantId IN :restaurantIds)
+//              AND o.isDeleted = false
+//            ORDER BY o.lastUpdatedTime DESC
+//            """)
+//    List<Order> findLastOrders(@Param("status") PaymentStatus status,
+//                               @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+//                               @Param("restaurantIds") Collection<Long> restaurantIds,
+//                               Pageable pageable);
 
+    @Query(value = """
+        SELECT 
+            o.order_id AS orderId,
+            o.total_price AS totalPrice,
+            o.payment_type AS paymentType,
+            STRING_AGG(si.sale_item_name || ' * ' || si.amount, ' ') AS description,
+            o.last_updated_time AS orderTime
+        FROM orders o
+        LEFT JOIN sale_item si ON si.order_id = o.id
+        WHERE o.payment_status = :status
+          AND (:skipRestaurantFilter = true OR o.restaurant_id IN (:restaurantIds))
+          AND o.is_deleted = false
+        GROUP BY o.id
+        ORDER BY o.last_updated_time DESC
+        """,
+            nativeQuery = true)
+    List<LastOrderListItemProjection> findLastOrders(
+            @Param("status") Integer status,
+            @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+            @Param("restaurantIds") Collection<Long> restaurantIds,
+            Pageable pageable
+    );
     @Query("""
             select count(o)
             from Order o

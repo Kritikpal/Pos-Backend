@@ -6,6 +6,8 @@ import com.kritik.POS.restaurant.entity.RestaurantChain;
  * Projection for {@link RestaurantChain}
  */
 public interface RestaurantChainInfo {
+    String getChainId();
+
     String getName();
 
     String getLogoUrl();

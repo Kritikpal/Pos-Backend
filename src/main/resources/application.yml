@@ -1,34 +1,42 @@
-
 spring:
-    application:
-        name: point-of-sale
-    datasource:
-        url: jdbc:postgresql://localhost:5432/db_pos
-        username: postgres
-        password: root
-        driver-class-name: org.postgresql.Driver
-    jpa:
-        hibernate:
-            ddl-auto: update
-        open-in-view: false
+  application:
+    name: point-of-sale
+  datasource:
+    url: jdbc:postgresql://localhost:5432/db_pos
+    username: postgres
+    password: root
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: kritikpal123@gmail.com
+    password: fqzh mhov ldck lyxm
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
 
 app:
-    jwt:
-        secret: ${JWT_SECRET:change-this-secret-key-to-at-least-32-characters}
-        issuer: pos-backend
-        access-seconds: 900    # 15 min
-        refresh-seconds: 604800 # 7 days
-    cors:
-        allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
-
-    superadmin:
-        email: yourgmail@gmail.com
-        password: Your@123
-#Warning
-#spring.jpa.properties.jakarta.persistence.sharedCache.mode=ALL
+  jwt:
+    secret: ${JWT_SECRET:change-this-secret-key-to-at-least-32-characters}
+    issuer: pos-backend
+    access-seconds: 900    # 15 min
+    refresh-seconds: 604800 # 7 days
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173}
+  superadmin:
+    email: yourgmail@gmail.com
+    password: Your@123
+  login-url: http://localhost:8080/login
 
 springdoc:
-    swagger-ui:
-        path: /swagger-ui.html
+  swagger-ui:
+    path: /swagger-ui.html
+
 server:
-    port: 8082
+  port: 8082
+
+# spring.jpa.properties.jakarta.persistence.sharedCache.mode=ALL

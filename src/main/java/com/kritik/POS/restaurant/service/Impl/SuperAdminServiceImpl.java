@@ -20,6 +20,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class SuperAdminServiceImpl implements SuperAdminService {
@@ -111,11 +113,12 @@ public class SuperAdminServiceImpl implements SuperAdminService {
         RestaurantChain chain = chainRepository.findById(chainId)
                 .orElseThrow(() -> new BadRequestException("Chain not found"));
 
+        String password = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         userService.createChainAdmin(
                 chain.getChainId(),
                 email,
                 phone,
-                "default@123"
+                password
         );
     }
 
@@ -125,12 +128,13 @@ public class SuperAdminServiceImpl implements SuperAdminService {
         Restaurant restaurant = restaurantRepository.findByRestaurantIdAndIsDeletedFalse(accessibleRestaurantId)
                 .orElseThrow(() -> new BadRequestException("Restaurant not found"));
 
+        String password = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
         userService.createRestaurantAdmin(
                 restaurant.getChainId(),
                 restaurant.getRestaurantId(),
                 email,
                 phone,
-                "default@123"
+                password
         );
     }
 }

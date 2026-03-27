@@ -24,6 +24,7 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long>, J
 
     @Query("""
             select r.chain.name as chainName,
+                   r.restaurantId as restaurantId,
                    r.chainId as chainId,
                    r.name as resturantName,
                    r.email as adminEmail,
