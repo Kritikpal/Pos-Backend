@@ -106,7 +106,7 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
                 localDate.atTime(StoreUtil.STORE_CLOSE_TIME)
         );
         List<LastOrderListItemProjection> lastOrders = orderRepository.findLastOrders(
-                4,
+                PaymentStatus.PAYMENT_SUCCESSFUL.ordinal(),
                 tenantAccessService.isSuperAdmin(),
                 tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
                 PageRequest.of(0, 1)
@@ -155,7 +155,7 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
     public List<LastOrderListItemProjection> getLast5Payments() {
         List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
         return orderRepository.findLastOrders(
-                4,
+                PaymentStatus.PAYMENT_SUCCESSFUL.ordinal(),
                 tenantAccessService.isSuperAdmin(),
                 tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
                 PageRequest.of(0, 5)
