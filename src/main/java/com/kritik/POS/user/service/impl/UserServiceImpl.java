@@ -1,6 +1,7 @@
 package com.kritik.POS.user.service.impl;
 
 import com.kritik.POS.exception.errors.BadRequestException;
+import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.restaurant.entity.Restaurant;
 import com.kritik.POS.restaurant.repository.RestaurantRepository;
 import com.kritik.POS.user.entity.Role;
@@ -9,6 +10,7 @@ import com.kritik.POS.user.repository.RoleRepository;
 import com.kritik.POS.user.repository.UserRepository;
 import com.kritik.POS.user.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -31,7 +33,7 @@ public class UserServiceImpl implements UserService {
         }
 
         Role role = roleRepository.findByRoleName("RESTAURANT_ADMIN")
-                .orElseThrow(() -> new RuntimeException("Role not found"));
+                .orElseThrow(() -> new AppException("RESTAURANT_ADMIN role not found", HttpStatus.INTERNAL_SERVER_ERROR));
 
         User user = new User();
         user.setEmail(email);
@@ -48,7 +50,7 @@ public class UserServiceImpl implements UserService {
     public void createChainAdmin(Long chainId, String email, String phone, String password) {
 
         Role role = roleRepository.findByRoleName("CHAIN_ADMIN")
-                .orElseThrow(() -> new RuntimeException("Role not found"));
+                .orElseThrow(() -> new AppException("CHAIN_ADMIN role not found", HttpStatus.INTERNAL_SERVER_ERROR));
 
         User user = new User();
         user.setEmail(email);
@@ -64,7 +66,7 @@ public class UserServiceImpl implements UserService {
     public void createSuperAdmin(String email, String phone, String password) {
 
         Role role = roleRepository.findByRoleName("SUPER_ADMIN")
-                .orElseThrow(() -> new RuntimeException("Role not found"));
+                .orElseThrow(() -> new AppException("SUPER_ADMIN role not found", HttpStatus.INTERNAL_SERVER_ERROR));
 
         User user = new User();
         user.setEmail(email);
@@ -86,7 +88,7 @@ public class UserServiceImpl implements UserService {
     @Override
     public void createStaff(Long restaurantId, String email, String phone, String password) {
         Role role = roleRepository.findByRoleName("STAFF")
-                .orElseThrow(() -> new RuntimeException("Role not found"));
+                .orElseThrow(() -> new AppException("STAFF role not found", HttpStatus.INTERNAL_SERVER_ERROR));
 
         Restaurant restaurant = restaurantRepository.findByRestaurantIdAndIsDeletedFalse(restaurantId)
                 .orElseThrow(() -> new BadRequestException("Restaurant not found"));

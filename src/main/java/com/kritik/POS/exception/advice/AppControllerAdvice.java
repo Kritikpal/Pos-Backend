@@ -9,6 +9,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -19,11 +20,11 @@ import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
-import org.springframework.web.bind.MissingServletRequestPartException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 @RestControllerAdvice
@@ -48,33 +49,6 @@ public class AppControllerAdvice extends ResponseEntityExceptionHandler {
                 .map(violation -> violation.getMessage())
                 .collect(Collectors.joining(", "));
         return buildResponse(HttpStatus.BAD_REQUEST, ResponseCode.ERROR, message);
-    }
-
-    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    public ResponseEntity<ApiResponse<Object>> handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
-        return buildResponse(
-                HttpStatus.BAD_REQUEST,
-                ResponseCode.ERROR,
-                "Invalid value supplied for '" + exception.getName() + "'"
-        );
-    }
-
-    @ExceptionHandler(MissingServletRequestParameterException.class)
-    public ResponseEntity<ApiResponse<Object>> handleMissingParameter(MissingServletRequestParameterException exception) {
-        return buildResponse(
-                HttpStatus.BAD_REQUEST,
-                ResponseCode.ERROR,
-                "Missing required parameter '" + exception.getParameterName() + "'"
-        );
-    }
-
-    @ExceptionHandler(MissingServletRequestPartException.class)
-    public ResponseEntity<ApiResponse<Object>> handleMissingPart(MissingServletRequestPartException exception) {
-        return buildResponse(
-                HttpStatus.BAD_REQUEST,
-                ResponseCode.ERROR,
-                "Missing required request part '" + exception.getRequestPartName() + "'"
-        );
     }
 
     @ExceptionHandler(CsvValidationException.class)
@@ -122,6 +96,36 @@ public class AppControllerAdvice extends ResponseEntityExceptionHandler {
                                                                   WebRequest request) {
         return ResponseEntity.badRequest()
                 .body(new ApiResponse<>(null, ResponseCode.ERROR, "Malformed request body"));
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex,
+                                                        HttpHeaders headers,
+                                                        HttpStatusCode status,
+                                                        WebRequest request) {
+        String parameterName = ex instanceof MethodArgumentTypeMismatchException mismatchException
+                ? mismatchException.getName()
+                : "request parameter";
+        return ResponseEntity.badRequest()
+                .body(new ApiResponse<>(null, ResponseCode.ERROR, "Invalid value supplied for '" + parameterName + "'"));
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMissingServletRequestParameter(MissingServletRequestParameterException ex,
+                                                                          HttpHeaders headers,
+                                                                          HttpStatusCode status,
+                                                                          WebRequest request) {
+        return ResponseEntity.badRequest()
+                .body(new ApiResponse<>(null, ResponseCode.ERROR, "Missing required parameter '" + ex.getParameterName() + "'"));
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMissingServletRequestPart(MissingServletRequestPartException ex,
+                                                                     HttpHeaders headers,
+                                                                     HttpStatusCode status,
+                                                                     WebRequest request) {
+        return ResponseEntity.badRequest()
+                .body(new ApiResponse<>(null, ResponseCode.ERROR, "Missing required request part '" + ex.getRequestPartName() + "'"));
     }
 
     private ResponseEntity<ApiResponse<Object>> buildResponse(HttpStatus status,

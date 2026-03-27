@@ -37,7 +37,7 @@ public class SuperAdminSeederService {
 
         // 2. Get SUPER_ADMIN role
         Role role = roleRepository.findByRoleName("SUPER_ADMIN")
-                .orElseThrow(() -> new RuntimeException("SUPER_ADMIN role not found"));
+                .orElseThrow(() -> new IllegalStateException("SUPER_ADMIN role not found"));
 
         // 3. Create user
         User user = new User();
