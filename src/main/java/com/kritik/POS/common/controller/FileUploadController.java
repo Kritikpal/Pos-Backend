@@ -22,12 +22,8 @@ public class FileUploadController {
     }
 
     @PostMapping(FileRoute.UPLOAD_FILE)
-    public ResponseEntity<ApiResponse<ProductFile>> uploadFile(@RequestParam("imageFileName") MultipartFile file){
+    public ResponseEntity<ApiResponse<ProductFile>> uploadFile(@RequestParam("imageFileName") MultipartFile file) {
         ProductFile productFile = fileUploadService.uploadFile(file);
-        return ResponseEntity.ok(ApiResponse.SUCCESS(productFile));
+        return ResponseEntity.ok(ApiResponse.SUCCESS(productFile, "File uploaded successfully"));
     }
-
-
-
-
 }

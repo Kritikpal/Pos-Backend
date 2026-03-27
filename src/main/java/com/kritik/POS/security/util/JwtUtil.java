@@ -1,62 +1,88 @@
 package com.kritik.POS.security.util;
 
-
-import io.jsonwebtoken.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.JwtParser;
+import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-
-import javax.crypto.SecretKey;
+import jakarta.annotation.PostConstruct;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
 import java.util.function.Function;
+import javax.crypto.SecretKey;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
+@Component
 public class JwtUtil {
 
-    private static final String SECRET_KEY = "dskjdvslcbvbsjdcskjdhsgdaihsvdhhefy8377892u3esnbcnc";
+    @Value("${app.jwt.secret}")
+    private String secretKeyValue;
 
-    public String generateToken(String userName, Map<String, Object> claims, Long expTimeInMilliSecond) {
+    @Value("${app.jwt.issuer:pos-backend}")
+    private String issuer;
 
-        Date startTime = new Date(System.currentTimeMillis());
-        SecretKey secretKey = Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
+    @Value("${app.jwt.access-seconds:900}")
+    private long accessTokenSeconds;
+
+    @Value("${app.jwt.refresh-seconds:604800}")
+    private long refreshTokenSeconds;
+
+    private SecretKey secretKey;
+    private JwtParser jwtParser;
+
+    @PostConstruct
+    void init() {
+        if (secretKeyValue == null || secretKeyValue.length() < 32) {
+            throw new IllegalStateException("JWT secret must be at least 32 characters long");
+        }
+
+        this.secretKey = Keys.hmacShaKeyFor(secretKeyValue.getBytes(StandardCharsets.UTF_8));
+        this.jwtParser = Jwts.parser()
+                .requireIssuer(issuer)
+                .verifyWith(secretKey)
+                .build();
+    }
+
+    public String generateAccessToken(String userName, Map<String, Object> claims) {
+        return generateToken(userName, claims, accessTokenSeconds);
+    }
+
+    public String generateRefreshToken(String userName, Map<String, Object> claims) {
+        return generateToken(userName, claims, refreshTokenSeconds);
+    }
+
+    public String generateToken(String userName, Map<String, Object> claims, long expiresInSeconds) {
+        Instant now = Instant.now();
         return Jwts.builder()
-                .signWith(secretKey)
                 .claims(claims)
-                .issuer("Pos-By-KP")
+                .issuer(issuer)
                 .subject(userName)
-                .issuedAt(startTime)
-                .expiration(new Date(expTimeInMilliSecond))
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plusSeconds(expiresInSeconds)))
+                .signWith(secretKey)
                 .compact();
     }
 
-    private static Claims getClaims(String token) {
-        return getClaimsFormToken(token);
-    }
-
-    private static Claims getClaimsFormToken(String token) {
-        try {
-            SecretKey secretKey = Keys.hmacShaKeyFor(SECRET_KEY.getBytes(StandardCharsets.UTF_8));
-            JwtParser parser = Jwts.parser()
-                    .verifyWith(secretKey)
-                    .build();
-            Jws<Claims> claimsJws = parser.parseSignedClaims(token);
-            return claimsJws.getPayload();
-        } catch (JwtException | IllegalArgumentException e) {
-            throw new JwtException("Invalid JWT Token");
-        }
-    }
-
     public <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
-        final Claims claims = getClaims(token);
-        return claimsResolver.apply(claims);
+        return claimsResolver.apply(extractAllClaims(token));
     }
 
     public Claims extractAllClaims(String token) {
-        return getClaimsFormToken(token);
+        try {
+            return jwtParser.parseSignedClaims(token).getPayload();
+        } catch (JwtException | IllegalArgumentException exception) {
+            throw new JwtException("Invalid JWT token", exception);
+        }
     }
 
-    public String getUserName(String token) throws JwtException {
-        return getClaims(token).getSubject();
+    public String getUserName(String token) {
+        return extractAllClaims(token).getSubject();
     }
 
-
+    public String extractTokenId(String token) {
+        return extractClaim(token, claims -> claims.get("tokenId", String.class));
+    }
 }

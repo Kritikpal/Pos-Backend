@@ -15,15 +15,18 @@ import com.kritik.POS.restaurant.service.RestaurantService;
 import com.kritik.POS.swagger.SwaggerTags;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
 @RestController
+@Validated
 @RequiredArgsConstructor
 public class StaffController {
 
@@ -43,8 +46,8 @@ public class StaffController {
             @RequestParam(required = false) Long restaurantId,
             @RequestParam(required = false) Boolean isActive,
             @RequestParam(required = false, defaultValue = "") String search,
-            @RequestParam(defaultValue = "0") Integer page,
-            @RequestParam(defaultValue = "20") Integer size
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "page must be 0 or greater") Integer page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "size must be at least 1") Integer size
     ) {
         return ResponseEntity.ok(ApiResponse.SUCCESS(
                 restaurantService.getMenuItemPage(chainId, restaurantId, isActive, search, page, size)
@@ -64,7 +67,7 @@ public class StaffController {
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE
     )
     public ResponseEntity<ApiResponse<MenuResponse>> editMenuItem(
-            @RequestPart("itemRequest") ItemRequest itemRequest,
+            @RequestPart("itemRequest") @Valid ItemRequest itemRequest,
             @RequestPart(value = "productImage", required = false) MultipartFile productImage
     ) {
         MenuResponse savedMenuItem = restaurantService.addEditMenuItem(itemRequest, productImage);
@@ -100,8 +103,8 @@ public class StaffController {
             @RequestParam(required = false) Long restaurantId,
             @RequestParam(required = false) Boolean isActive,
             @RequestParam(required = false, defaultValue = "") String search,
-            @RequestParam(defaultValue = "0") Integer page,
-            @RequestParam(defaultValue = "20") Integer size
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "page must be 0 or greater") Integer page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "size must be at least 1") Integer size
     ) {
         return ResponseEntity.ok(ApiResponse.SUCCESS(
                 restaurantService.getCategoryPage(chainId, restaurantId, isActive, search, page, size)
@@ -146,7 +149,7 @@ public class StaffController {
 
     @Tag(name = SwaggerTags.TABLE)
     @PostMapping(RestaurantRoute.EDIT_ADD_TABLE)
-    public ResponseEntity<ApiResponse<RestaurantTable>> addEditTable(@RequestBody TableRequest tableRequest) {
+    public ResponseEntity<ApiResponse<RestaurantTable>> addEditTable(@RequestBody @Valid TableRequest tableRequest) {
         RestaurantTable savedTable = restaurantService.addEditTable(tableRequest);
         return ResponseEntity.ok(ApiResponse.SUCCESS(savedTable));
     }

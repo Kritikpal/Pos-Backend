@@ -1,37 +1,21 @@
 package com.kritik.POS.security.models;
 
-
-import com.kritik.POS.user.entity.Role;
-import com.kritik.POS.user.entity.User;
+import java.util.Collection;
+import java.util.Set;
 import lombok.Data;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Set;
-import java.util.stream.Collectors;
-
 @Data
 public class SecurityUser implements UserDetails {
 
     private final String email;
-    private final String password;
+    private final String token;
+    private final String tokenId;
     private final Long restaurantId;
     private final Long chainId;
     private final Set<String> roles;
-
-
-    public SecurityUser(String username, Long restaurantId, Long chainId, Set<String> roles, String token) {
-        this.email = username;
-        this.password = token;
-        this.chainId = chainId;
-        this.restaurantId = restaurantId;
-        this.roles = roles;
-    }
-
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
@@ -42,7 +26,7 @@ public class SecurityUser implements UserDetails {
 
     @Override
     public String getPassword() {
-        return password;
+        return token;
     }
 
     @Override
@@ -71,8 +55,7 @@ public class SecurityUser implements UserDetails {
     }
 
     public boolean hasRole(String roleName) {
-        return roles.stream()
-                .anyMatch(role -> role.equalsIgnoreCase(roleName));
+        return roles.stream().anyMatch(role -> role.equalsIgnoreCase(roleName));
     }
 
     public boolean isSuperAdmin() {

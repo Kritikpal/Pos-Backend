@@ -8,5 +8,5 @@ public record TaxRequest(
         Long restaurantId,
         @NotNull(message = "Please Provide A tax name") String taxName,
         @NotNull(message = "Tax amount is required") Double taxAmount,
-        @NotNull(message = "Please provide is active flag") boolean active) {
+        @NotNull(message = "Please provide is active flag") Boolean active) {
 }

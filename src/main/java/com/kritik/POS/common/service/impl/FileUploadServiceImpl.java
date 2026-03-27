@@ -2,73 +2,84 @@ package com.kritik.POS.common.service.impl;
 
 import com.kritik.POS.common.repository.FileRepository;
 import com.kritik.POS.common.service.FileUploadService;
+import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.restaurant.entity.ProductFile;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.io.ResourceLoader;
-import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.util.Objects;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
+
 @Service
 public class FileUploadServiceImpl implements FileUploadService {
 
+    private static final Path UPLOAD_DIR = Paths.get("uploads");
+
     private final FileRepository fileRepository;
-    private final String UPLOAD_DIR = "uploads/";
-    private final ResourceLoader resourceLoader;
 
     @Autowired
-    public FileUploadServiceImpl(FileRepository fileRepository, ResourceLoader resourceLoader) {
+    public FileUploadServiceImpl(FileRepository fileRepository) {
         this.fileRepository = fileRepository;
-        this.resourceLoader = resourceLoader;
     }
 
-    // ✅ Existing (delegates to core method)
     @Override
     public ProductFile uploadFile(MultipartFile multipartFile) {
+        if (multipartFile == null || multipartFile.isEmpty()) {
+            throw new AppException("Please upload a non-empty file", HttpStatus.BAD_REQUEST);
+        }
         try {
             return uploadFile(
                     multipartFile.getBytes(),
                     multipartFile.getOriginalFilename(),
                     multipartFile.getContentType()
             );
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to upload file", e);
+        } catch (IOException exception) {
+            throw new AppException("Failed to upload file", HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 
-    // ✅ NEW CORE METHOD (single source of truth)
     @Override
     public ProductFile uploadFile(byte[] data, String fileName, String contentType) {
+        if (data == null || data.length == 0) {
+            throw new AppException("File content is empty", HttpStatus.BAD_REQUEST);
+        }
 
         String safeFileName = generateFileName(fileName);
-        Path filePath = Paths.get(UPLOAD_DIR, safeFileName);
+        Path filePath = UPLOAD_DIR.resolve(safeFileName).normalize();
+        if (!filePath.startsWith(UPLOAD_DIR)) {
+            throw new AppException("Invalid file name", HttpStatus.BAD_REQUEST);
+        }
 
         try {
-            Files.createDirectories(filePath.getParent()); // always safe
+            Files.createDirectories(UPLOAD_DIR);
             Files.write(filePath, data);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to store file", e);
+        } catch (IOException exception) {
+            throw new AppException("Failed to store file", HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
         return saveMetadata(safeFileName, filePath, contentType);
     }
 
-    // 🔹 Helper: filename generator
     private String generateFileName(String originalFilename) {
-        return LocalDateTime.now().toString().replace(":", "-") + "_" + originalFilename;
+        String cleanFileName = StringUtils.cleanPath(Objects.requireNonNullElse(originalFilename, "file.bin"));
+        if (!StringUtils.hasText(cleanFileName) || cleanFileName.contains("..")) {
+            throw new AppException("Invalid file name", HttpStatus.BAD_REQUEST);
+        }
+        return LocalDateTime.now().toString().replace(":", "-") + "_" + cleanFileName;
     }
 
-    // 🔹 Helper: DB save
     private ProductFile saveMetadata(String fileName, Path filePath, String contentType) {
         ProductFile productFile = new ProductFile();
         productFile.setFileName(fileName);
         productFile.setUrl(filePath.toString());
         productFile.setUploadTime(LocalDateTime.now());
-        productFile.setFileType(contentType);
+        productFile.setFileType(StringUtils.hasText(contentType) ? contentType : "application/octet-stream");
         return fileRepository.save(productFile);
     }
 }

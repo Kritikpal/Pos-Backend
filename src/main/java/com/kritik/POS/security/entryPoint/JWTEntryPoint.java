@@ -6,14 +6,12 @@ import com.kritik.POS.common.model.ApiResponse;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 
-import java.awt.*;
 import java.io.IOException;
 
 @Component
@@ -26,9 +24,9 @@ public class JWTEntryPoint implements AuthenticationEntryPoint {
         ObjectMapper objectMapper = new ObjectMapper();
 
         ApiResponse<String> apiResponse = new ApiResponse<>(
-                "Unauthorized",
+                null,
                 ResponseCode.UNAUTHORIZED,
-                exception.getMessage()
+                "Authentication is required to access this resource"
         );
 
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
