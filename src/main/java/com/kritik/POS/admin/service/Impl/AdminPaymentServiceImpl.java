@@ -13,8 +13,8 @@ import com.kritik.POS.order.entity.enums.PaymentType;
 import com.kritik.POS.order.model.response.PaymentByHour;
 import com.kritik.POS.order.repository.OrderRepository;
 import com.kritik.POS.order.repository.SaleItemRepository;
-import com.kritik.POS.restaurant.repository.MenuItemRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import com.kritik.POS.security.service.TenantAccessService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,17 +26,11 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor
 public class AdminPaymentServiceImpl implements AdminPaymentService {
     private final OrderRepository orderRepository;
-    private final MenuItemRepository menuItemRepository;
     private final SaleItemRepository saleItemRepository;
-
-    @Autowired
-    public AdminPaymentServiceImpl(OrderRepository orderRepository, MenuItemRepository menuItemRepository, SaleItemRepository saleItemRepository) {
-        this.orderRepository = orderRepository;
-        this.menuItemRepository = menuItemRepository;
-        this.saleItemRepository = saleItemRepository;
-    }
+    private final TenantAccessService tenantAccessService;
 
     @Override
     public List<OrderResponse> getAllOrdersToday(PaymentStatus paymentStatus, PaymentType paymentType, String orderId, LocalDate startDate, LocalDate endDate) {
@@ -51,19 +45,37 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
             orderId = null;
         }
 
-        return orderRepository.findAllByFilters
-                        (orderId, paymentType, paymentStatus,
-                                startDate.atTime(StoreUtil.STORE_OPEN_TIME), endDate.atTime(StoreUtil.STORE_CLOSE_TIME))
-                .stream().map(OrderResponse::buildObjectFromOrder).toList();
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+        if (!tenantAccessService.isSuperAdmin() && accessibleRestaurantIds.isEmpty()) {
+            return List.of();
+        }
+
+        return orderRepository.findAllByFilters(
+                        orderId,
+                        tenantAccessService.isSuperAdmin(),
+                        tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+                        paymentType,
+                        paymentStatus,
+                        startDate.atTime(StoreUtil.STORE_OPEN_TIME),
+                        endDate.atTime(StoreUtil.STORE_CLOSE_TIME),
+                        PageRequest.of(0, 100)
+                )
+                .stream()
+                .map(OrderResponse::buildObjectFromOrder)
+                .toList();
 
     }
 
     @Override
     public ShortReport getShortReport(LocalDate localDate) {
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
         Double avrageOrderValue = orderRepository.findAverageOrderValueByDateAndPaymentType(
                 localDate.atTime(StoreUtil.STORE_OPEN_TIME),
                 localDate.atTime(StoreUtil.STORE_CLOSE_TIME),
-                PaymentStatus.PAYMENT_SUCCESSFUL);
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+                PaymentStatus.PAYMENT_SUCCESSFUL
+        );
         if (avrageOrderValue == null) {
             avrageOrderValue = 0.0;
         }
@@ -71,30 +83,53 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
         Double totalOrderValue = orderRepository.getTotalAmountByLastUpdatedTimeAndPaymentStatus(
                 localDate.atTime(StoreUtil.STORE_OPEN_TIME),
                 localDate.atTime(StoreUtil.STORE_CLOSE_TIME),
-                PaymentStatus.PAYMENT_SUCCESSFUL);
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+                PaymentStatus.PAYMENT_SUCCESSFUL
+        );
         if (totalOrderValue == null) {
             totalOrderValue = 0.0;
         }
 
         long successCount = orderRepository.countByPaymentStatusAndLastUpdatedTimeBetween(
                 PaymentStatus.PAYMENT_SUCCESSFUL,
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
                 localDate.atTime(StoreUtil.STORE_OPEN_TIME),
-                localDate.atTime(StoreUtil.STORE_CLOSE_TIME));
+                localDate.atTime(StoreUtil.STORE_CLOSE_TIME)
+        );
         long refundCount = orderRepository.countByPaymentStatusAndLastUpdatedTimeBetween(
                 PaymentStatus.PAYMENT_REFUND,
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
                 localDate.atTime(StoreUtil.STORE_OPEN_TIME),
-                localDate.atTime(StoreUtil.STORE_CLOSE_TIME));
-        List<Order> lastOrders = orderRepository.findLastOrders(PaymentStatus.PAYMENT_SUCCESSFUL, PageRequest.of(0, 1));
+                localDate.atTime(StoreUtil.STORE_CLOSE_TIME)
+        );
+        List<Order> lastOrders = orderRepository.findLastOrders(
+                PaymentStatus.PAYMENT_SUCCESSFUL,
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+                PageRequest.of(0, 1)
+        );
         double lastOrderValue = 0.0;
         if (!lastOrders.isEmpty()) {
-            lastOrderValue = lastOrders.stream().findFirst().orElseThrow(() -> new AppException("Internal Server error", HttpStatus.INTERNAL_SERVER_ERROR)).getTotalPrice();
+            lastOrderValue = lastOrders.stream()
+                    .findFirst()
+                    .orElseThrow(() -> new AppException("Internal Server error", HttpStatus.INTERNAL_SERVER_ERROR))
+                    .getTotalPrice();
         }
         return new ShortReport(successCount, refundCount, lastOrderValue, totalOrderValue, avrageOrderValue, LocalDate.now());
     }
 
     @Override
     public List<PaymentByHour> getHourlyPaymentReport() {
-        List<PaymentByHour> paymentByHours = orderRepository.countPaymentsByHour(PaymentStatus.PAYMENT_SUCCESSFUL, LocalDate.now());
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+        List<PaymentByHour> paymentByHours = orderRepository.countPaymentsByHour(
+                PaymentStatus.PAYMENT_SUCCESSFUL,
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+                LocalDate.now()
+        );
         Map<Integer, PaymentByHour> paymentByHourMap = paymentByHours.stream()
                 .collect(Collectors.toMap(PaymentByHour::getHourOfDay, p -> p));
         List<PaymentByHour> response = new ArrayList<>(24);
@@ -107,20 +142,26 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
 
     @Override
     public List<LastOrderListItem> getLast5Payments() {
-        List<Order> lastOrders = orderRepository.findLastOrders(PaymentStatus.PAYMENT_SUCCESSFUL,
-                PageRequest.of(0, 5));
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+        List<Order> lastOrders = orderRepository.findLastOrders(
+                PaymentStatus.PAYMENT_SUCCESSFUL,
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+                PageRequest.of(0, 5)
+        );
         return lastOrders.stream().map(LastOrderListItem::new).toList();
     }
 
     @Override
     public List<MostOrderedMenu> getMostOrderedItem(Integer lastDays, Integer limit) {
-        List<MostOrderedMenu> mostOrderedItemsByPaymentStatusAndDate =
-                saleItemRepository.findMostOrderedItemsByPaymentStatusAndDate(PaymentStatus.PAYMENT_SUCCESSFUL,
-                        LocalDate.now().minusDays(lastDays).atTime(StoreUtil.STORE_OPEN_TIME),
-                        LocalDate.now().atTime(StoreUtil.STORE_CLOSE_TIME),
-                        PageRequest.of(0, limit));
-        return mostOrderedItemsByPaymentStatusAndDate;
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+        return saleItemRepository.findMostOrderedItemsByPaymentStatusAndDate(
+                PaymentStatus.PAYMENT_SUCCESSFUL,
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+                LocalDate.now().minusDays(lastDays).atTime(StoreUtil.STORE_OPEN_TIME),
+                LocalDate.now().atTime(StoreUtil.STORE_CLOSE_TIME),
+                PageRequest.of(0, limit)
+        );
     }
-
-
 }

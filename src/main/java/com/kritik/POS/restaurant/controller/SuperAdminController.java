@@ -9,14 +9,13 @@ import com.kritik.POS.restaurant.models.response.RestaurantProjection;
 import com.kritik.POS.restaurant.models.response.RestaurantSetupResponse;
 import com.kritik.POS.restaurant.route.SuperAdminRoute;
 import com.kritik.POS.restaurant.service.SuperAdminService;
-import com.kritik.POS.security.models.SecurityUser;
 import com.kritik.POS.swagger.SwaggerTags;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -25,9 +24,6 @@ public class SuperAdminController {
 
     private final SuperAdminService superAdminService;
 
-    // ==============================
-    // 🔥 FULL SETUP
-    // ==============================
     @Tag(name = SwaggerTags.SUPER_ADMIN)
     @PostMapping(SuperAdminRoute.SETUP_RESTAURANT)
     public ResponseEntity<ApiResponse<RestaurantSetupResponse>> setupRestaurant(
@@ -38,9 +34,6 @@ public class SuperAdminController {
         return ResponseEntity.ok(ApiResponse.SUCCESS(response, "Restaurant setup completed"));
     }
 
-    // ==============================
-    // 🏢 CHAIN
-    // ==============================
     @Tag(name = SwaggerTags.CHAIN)
     @PostMapping(SuperAdminRoute.CREATE_CHAIN)
     public ResponseEntity<ApiResponse<Long>> createChain(@RequestParam String name) throws AppException {
@@ -51,38 +44,48 @@ public class SuperAdminController {
 
     @Tag(name = SwaggerTags.CHAIN)
     @GetMapping(SuperAdminRoute.GET_ALL_CHAINS)
-    public ResponseEntity<ApiResponse<Page<RestaurantChainInfo>>> getAllChains() throws AppException {
+    public ResponseEntity<ApiResponse<Page<RestaurantChainInfo>>> getAllChains(
+            @RequestParam(required = false) Long chainId,
+            @RequestParam(required = false, defaultValue = "") String search,
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size
+    ) throws AppException {
 
-        return ResponseEntity.ok(ApiResponse.SUCCESS(superAdminService.getAllChains()));
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                superAdminService.getAllChains(chainId, search, PageRequest.of(page, size))
+        ));
     }
 
-    // ==============================
-    // 🍽️ RESTAURANT
-    // ==============================
     @Tag(name = SwaggerTags.RESTAURANT)
     @PostMapping(SuperAdminRoute.CREATE_RESTAURANT)
     public ResponseEntity<ApiResponse<RestaurantSetupResponse>> createRestaurant(
             @RequestBody @Valid RestaurantRequest request,
-            @AuthenticationPrincipal SecurityUser securityUser
-            ) throws AppException {
+            @RequestParam(required = false) Long chainId
+    ) throws AppException {
 
         return ResponseEntity.ok(
-                ApiResponse.SUCCESS(superAdminService.createRestaurant(request,securityUser.getRestaurantId()), "Restaurant created")
+                ApiResponse.SUCCESS(superAdminService.createRestaurant(request, chainId), "Restaurant created")
         );
     }
 
     @Tag(name = SwaggerTags.RESTAURANT)
     @GetMapping(SuperAdminRoute.GET_ALL_RESTAURANTS)
-    public ResponseEntity<ApiResponse<Page<RestaurantProjection>>> getAllRestaurants() throws AppException {
+    public ResponseEntity<ApiResponse<Page<RestaurantProjection>>> getAllRestaurants(
+            @RequestParam(required = false) Long chainId,
+            @RequestParam(required = false) Long restaurantId,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false, defaultValue = "") String search,
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size
+    ) throws AppException {
 
         return ResponseEntity.ok(
-                ApiResponse.SUCCESS(superAdminService.getAllRestaurants())
+                ApiResponse.SUCCESS(
+                        superAdminService.getAllRestaurants(chainId, restaurantId, isActive, search, PageRequest.of(page, size))
+                )
         );
     }
 
-    // ==============================
-    // 👤 ADMIN
-    // ==============================
     @Tag(name = SwaggerTags.ADMIN)
     @PostMapping(SuperAdminRoute.CREATE_CHAIN_ADMIN)
     public ResponseEntity<ApiResponse<String>> createChainAdmin(

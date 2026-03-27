@@ -1,26 +1,25 @@
 package com.kritik.POS.user.service.impl;
 
-
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.security.util.JwtUtil;
 import com.kritik.POS.user.entity.RefreshToken;
 import com.kritik.POS.user.entity.Role;
 import com.kritik.POS.user.entity.User;
 import com.kritik.POS.user.model.request.LoginRequest;
-import com.kritik.POS.user.model.request.SignUpRequest;
 import com.kritik.POS.user.model.response.LoginResponse;
 import com.kritik.POS.user.repository.RefreshTokenRepository;
-import com.kritik.POS.user.repository.RoleRepository;
 import com.kritik.POS.user.repository.UserRepository;
 import com.kritik.POS.user.service.AuthService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,7 +40,6 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException("Username or password is not matching", HttpStatus.BAD_REQUEST);
         }
 
-        // 🔥 Create Refresh Token Entity
         String tokenId = UUID.randomUUID().toString();
 
         RefreshToken refreshToken = RefreshToken.builder()
@@ -55,31 +53,36 @@ public class AuthServiceImpl implements AuthService {
         refreshTokenRepository.save(refreshToken);
 
         JwtUtil jwtUtil = new JwtUtil();
-        // 🔥 Claims
-        Map<String, Object> claims = new HashMap<>();
         Set<String> roles = user.getRoles().stream().map(Role::getRoleName).collect(Collectors.toSet());
+        String primaryRole = roles.stream().findFirst().orElse("STAFF");
+
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("role", primaryRole);
         claims.put("roles", roles);
         claims.put("restaurantId", user.getRestaurantId());
         claims.put("chainId", user.getChainId());
-        claims.put("tokenId", tokenId); // 🔥 important
+        claims.put("tokenId", tokenId);
 
-        // 🔥 Access Token (short)
         String accessToken = jwtUtil.generateToken(
                 user.getEmail(),
                 claims,
-                System.currentTimeMillis() + 15 * 60 * 1000 // 15 min
+                System.currentTimeMillis() + 15 * 60 * 1000
         );
 
-        // 🔥 Refresh Token (long)
         String refreshTokenStr = jwtUtil.generateToken(
                 user.getEmail(),
                 Map.of("tokenId", tokenId),
-                System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000 // 7 days
+                System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000
         );
 
-        return new LoginResponse(accessToken, refreshTokenStr,
-                roles
-                , user.getRestaurantId(), user.getChainId());
+        return new LoginResponse(
+                accessToken,
+                refreshTokenStr,
+                primaryRole,
+                roles,
+                user.getRestaurantId(),
+                user.getChainId()
+        );
     }
 
     @Override
@@ -99,15 +102,12 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("Token expired");
         }
 
-        // 🔥 Revoke old token
         storedToken.setRevoked(true);
         refreshTokenRepository.save(storedToken);
 
-        // 🔥 Get user
         User user = userRepository.findById(storedToken.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // 🔥 Create new token
         String newTokenId = UUID.randomUUID().toString();
 
         RefreshToken newRefreshToken = RefreshToken.builder()
@@ -120,9 +120,10 @@ public class AuthServiceImpl implements AuthService {
 
         refreshTokenRepository.save(newRefreshToken);
 
-        // 🔥 Claims
         Set<String> roles = user.getRoles().stream().map(Role::getRoleName).collect(Collectors.toSet());
+        String primaryRole = roles.stream().findFirst().orElse("STAFF");
         Map<String, Object> claims = new HashMap<>();
+        claims.put("role", primaryRole);
         claims.put("roles", roles);
         claims.put("restaurantId", user.getRestaurantId());
         claims.put("chainId", user.getChainId());
@@ -140,13 +141,19 @@ public class AuthServiceImpl implements AuthService {
                 System.currentTimeMillis() + 7L * 24 * 60 * 60 * 1000
         );
 
-        return new LoginResponse(accessToken, refreshTokenStr, roles,
+        return new LoginResponse(
+                accessToken,
+                refreshTokenStr,
+                primaryRole,
+                roles,
                 user.getRestaurantId(),
-                user.getChainId());
+                user.getChainId()
+        );
     }
 
     @Override
     public User getUserByUserName(String email) throws AppException {
-        return userRepository.findByEmail(email).orElseThrow(() -> new AppException("User not found", HttpStatus.BAD_REQUEST));
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new AppException("User not found", HttpStatus.BAD_REQUEST));
     }
 }

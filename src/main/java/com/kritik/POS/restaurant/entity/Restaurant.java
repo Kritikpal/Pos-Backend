@@ -36,6 +36,9 @@ public class Restaurant {
     @JoinColumn(name = "chain_id")
     private RestaurantChain chain;
 
+    @Column(name = "chain_id", insertable = false, updatable = false)
+    private Long chainId;
+
     // 📍 Address
     private String addressLine1;
     private String addressLine2;
@@ -66,6 +69,7 @@ public class Restaurant {
     @PrePersist
     public void prePersist() {
         this.createdAt = LocalDateTime.now();
+        this.updatedAt = this.createdAt;
     }
 
     @PreUpdate

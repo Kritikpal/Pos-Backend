@@ -6,33 +6,55 @@ import com.kritik.POS.restaurant.models.response.RestaurantProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.lang.Nullable;
 
-import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
-public interface RestaurantRepository extends JpaRepository<Restaurant, Long> {
-  boolean existsByCodeAndChain(String code, RestaurantChain chain);
+public interface RestaurantRepository extends JpaRepository<Restaurant, Long>, JpaSpecificationExecutor<Restaurant> {
+    boolean existsByCodeAndChain(String code, RestaurantChain chain);
 
-  @Query("SELECT r FROM Restaurant r JOIN FETCH r.chain")
-  List<Restaurant> findAllWithChain();
+    boolean existsByRestaurantIdAndChainIdAndIsDeletedFalse(Long restaurantId, Long chainId);
 
-  @Query("""
-          select r.chain.name as chainName,
-                 r.chain.chainId as chainId,
-                 r.name as resturantName,
-                 r.email as adminEmail,
-                 r.code as code
-                 from Restaurant r
-          where r.chain.chainId = :chainId or upper(r.name) = upper(:name)
-                    and r.isActive = true and
-                    r.isDeleted = false or
-                    r.restaurantId = :restaurantId
-                    order by r.updatedAt""")
-  Page<RestaurantProjection> findRestaurants(@Param("chainId") @Nullable Long chainId,
-                                             @Param("name") @Nullable String name,
-                                             @Param("restaurantId") @Nullable Long restaurantId,
-                                             Pageable pageable);
+    @Query("SELECT r FROM Restaurant r JOIN FETCH r.chain WHERE r.isDeleted = false")
+    List<Restaurant> findAllWithChain();
+
+    @Query("""
+            select r.chain.name as chainName,
+                   r.chainId as chainId,
+                   r.name as resturantName,
+                   r.email as adminEmail,
+                   r.code as code
+            from Restaurant r
+            where (:chainId is null or r.chainId = :chainId)
+              and (:restaurantId is null or r.restaurantId = :restaurantId)
+              and (:isActive is null or r.isActive = :isActive)
+              and (
+                  coalesce(:name, '') = ''
+                  or lower(r.name) like lower(concat('%', :name, '%'))
+                  or lower(r.code) like lower(concat('%', :name, '%'))
+              )
+              and r.isDeleted = false
+            order by r.updatedAt desc, r.createdAt desc
+            """)
+    Page<RestaurantProjection> findRestaurants(@Param("chainId") @Nullable Long chainId,
+                                               @Param("name") @Nullable String name,
+                                               @Param("restaurantId") @Nullable Long restaurantId,
+                                               @Param("isActive") @Nullable Boolean isActive,
+                                               Pageable pageable);
+
+    @Query("""
+            select r.restaurantId
+            from Restaurant r
+            where r.chainId = :chainId
+              and r.isActive = true
+              and r.isDeleted = false
+            order by r.restaurantId
+            """)
+    List<Long> findActiveRestaurantIdsByChainId(@Param("chainId") Long chainId);
+
+    Optional<Restaurant> findByRestaurantIdAndIsDeletedFalse(Long restaurantId);
 }

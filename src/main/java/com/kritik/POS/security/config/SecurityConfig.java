@@ -2,14 +2,11 @@ package com.kritik.POS.security.config;
 
 import com.kritik.POS.security.entryPoint.JWTEntryPoint;
 import com.kritik.POS.security.filter.JwtFilter;
-import com.kritik.POS.user.service.AuthService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
@@ -17,9 +14,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.PathMatchConfigurer;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-
-import static com.kritik.POS.user.model.enums.UserRole.STAFF;
-import static com.kritik.POS.user.model.enums.UserRole.STORE_OWNER;
 
 @EnableWebSecurity
 @Configuration
@@ -29,32 +23,26 @@ public class SecurityConfig {
     private final JWTEntryPoint jwtEntryPoint;
     private final JwtFilter jwtFilter;
 
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
 
         httpSecurity
                 .authorizeHttpRequests(request -> request
-                        .requestMatchers("/store/**").hasAnyAuthority(STAFF.name(), STORE_OWNER.name())
-                        .requestMatchers("/store-owner/**").hasAnyAuthority(STORE_OWNER.name())
-                        .anyRequest().permitAll())
+                        .requestMatchers(
+                                "/auth/**",
+                                "/test/**",
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**"
+                        ).permitAll()
+                        .anyRequest().authenticated())
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class) // Adding JWT filter
-                .exceptionHandling(ex ->
-                        ex.authenticationEntryPoint(jwtEntryPoint)) // Custom entry point
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                );
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(jwtEntryPoint))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
         return httpSecurity.build();
-    }
-
-    @Bean
-    WebSecurityCustomizer webSecurityCustomizer() {
-        return web -> {
-            web.ignoring().requestMatchers("/test/**", "/pre-auth/**");
-        };
     }
 
     @Bean
@@ -75,5 +63,4 @@ public class SecurityConfig {
             }
         };
     }
-
 }

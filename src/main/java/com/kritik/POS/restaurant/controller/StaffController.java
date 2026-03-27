@@ -1,6 +1,9 @@
 package com.kritik.POS.restaurant.controller;
 
 import com.kritik.POS.common.model.ApiResponse;
+import com.kritik.POS.common.model.PageResponse;
+import com.kritik.POS.restaurant.dto.CategoryResponseDto;
+import com.kritik.POS.restaurant.dto.MenuItemResponseDto;
 import com.kritik.POS.restaurant.entity.RestaurantTable;
 import com.kritik.POS.restaurant.models.request.CategoryRequest;
 import com.kritik.POS.restaurant.models.request.ItemRequest;
@@ -12,7 +15,7 @@ import com.kritik.POS.restaurant.service.RestaurantService;
 import com.kritik.POS.swagger.SwaggerTags;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,21 +24,31 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 @RestController
+@RequiredArgsConstructor
 public class StaffController {
 
     private final RestaurantService restaurantService;
-
-    @Autowired
-    public StaffController(RestaurantService restaurantService) {
-        this.restaurantService = restaurantService;
-    }
-
 
     @Tag(name = SwaggerTags.MENU_ITEM)
     @GetMapping(RestaurantRoute.GET_ALL_ITEMS)
     public ResponseEntity<ApiResponse<List<MenuResponse>>> allItems() {
         List<MenuResponse> menuItemList = restaurantService.getMenuItems();
         return ResponseEntity.ok(ApiResponse.SUCCESS(menuItemList));
+    }
+
+    @Tag(name = SwaggerTags.MENU_ITEM)
+    @GetMapping(RestaurantRoute.GET_MENU_ITEMS_PAGE)
+    public ResponseEntity<ApiResponse<PageResponse<MenuItemResponseDto>>> menuItemPage(
+            @RequestParam(required = false) Long chainId,
+            @RequestParam(required = false) Long restaurantId,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false, defaultValue = "") String search,
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size
+    ) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                restaurantService.getMenuItemPage(chainId, restaurantId, isActive, search, page, size)
+        ));
     }
 
     @Tag(name = SwaggerTags.MENU_ITEM)
@@ -53,7 +66,7 @@ public class StaffController {
     public ResponseEntity<ApiResponse<MenuResponse>> editMenuItem(
             @RequestPart("itemRequest") ItemRequest itemRequest,
             @RequestPart(value = "productImage", required = false) MultipartFile productImage
-    ){
+    ) {
         MenuResponse savedMenuItem = restaurantService.addEditMenuItem(itemRequest, productImage);
         return ResponseEntity.ok(ApiResponse.SUCCESS(savedMenuItem));
     }
@@ -78,6 +91,21 @@ public class StaffController {
     public ResponseEntity<ApiResponse<List<CategoryResponse>>> getAllCategories() {
         List<CategoryResponse> menuItemList = restaurantService.getAllCategories();
         return ResponseEntity.ok(ApiResponse.SUCCESS(menuItemList));
+    }
+
+    @Tag(name = SwaggerTags.CATEGORY)
+    @GetMapping(RestaurantRoute.GET_CATEGORIES_PAGE)
+    public ResponseEntity<ApiResponse<PageResponse<CategoryResponseDto>>> categoryPage(
+            @RequestParam(required = false) Long chainId,
+            @RequestParam(required = false) Long restaurantId,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false, defaultValue = "") String search,
+            @RequestParam(defaultValue = "0") Integer page,
+            @RequestParam(defaultValue = "20") Integer size
+    ) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                restaurantService.getCategoryPage(chainId, restaurantId, isActive, search, page, size)
+        ));
     }
 
     @Tag(name = SwaggerTags.CATEGORY)
@@ -129,6 +157,4 @@ public class StaffController {
         boolean deletedCategory = restaurantService.deleteTable(tableId);
         return ResponseEntity.ok(ApiResponse.SUCCESS(deletedCategory, "Successfully Deleted"));
     }
-
-
 }

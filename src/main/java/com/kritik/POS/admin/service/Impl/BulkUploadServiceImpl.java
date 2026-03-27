@@ -12,6 +12,7 @@ import com.kritik.POS.restaurant.repository.MenuItemRepository;
 import com.kritik.POS.restaurant.repository.RestaurantTableRepository;
 import com.kritik.POS.admin.service.BulkUploadService;
 import com.kritik.POS.restaurant.service.RestaurantService;
+import com.kritik.POS.security.service.TenantAccessService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,13 +27,15 @@ public class BulkUploadServiceImpl implements BulkUploadService {
     private final RestaurantTableRepository tableRepository;
     private final CategoryRepository categoryRepository;
     private final RestaurantService restaurantService;
+    private final TenantAccessService tenantAccessService;
 
     @Autowired
-    public BulkUploadServiceImpl(MenuItemRepository menuItemRepository, RestaurantTableRepository tableRepository, CategoryRepository categoryRepository, RestaurantService restaurantService) {
+    public BulkUploadServiceImpl(MenuItemRepository menuItemRepository, RestaurantTableRepository tableRepository, CategoryRepository categoryRepository, RestaurantService restaurantService, TenantAccessService tenantAccessService) {
         this.menuItemRepository = menuItemRepository;
         this.tableRepository = tableRepository;
         this.categoryRepository = categoryRepository;
         this.restaurantService = restaurantService;
+        this.tenantAccessService = tenantAccessService;
     }
 
 
@@ -56,7 +59,12 @@ public class BulkUploadServiceImpl implements BulkUploadService {
             menuItem = menuItemRepository.findById(itemRequest.itemId()).orElseThrow(() -> new AppException("Invalid Item Id", HttpStatus.BAD_REQUEST));
         }
         Category category = categoryRepository.findById(itemRequest.categoryId()).orElseThrow(() -> new AppException("Invalid Category Id" + itemRequest.categoryId(), HttpStatus.BAD_GATEWAY));
-        return itemRequest.createMenuItemFromRequest(menuItem,category);
+        MenuItem updated = itemRequest.createMenuItemFromRequest(menuItem,category);
+        updated.setRestaurantId(category.getRestaurantId());
+        if (updated.getItemStock() != null) {
+            updated.getItemStock().setRestaurantId(category.getRestaurantId());
+        }
+        return updated;
     }
 
     @Override
@@ -73,6 +81,9 @@ public class BulkUploadServiceImpl implements BulkUploadService {
         }
         restaurantTable.setTableNumber(tableRequest.tableNumber());
         restaurantTable.setSeats(tableRequest.noOfSeat());
+        restaurantTable.setRestaurantId(tenantAccessService.resolveAccessibleRestaurantId(
+                tableRequest.restaurantId() != null ? tableRequest.restaurantId() : restaurantTable.getRestaurantId()
+        ));
         return restaurantTable;
     }
 

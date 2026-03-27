@@ -79,7 +79,7 @@ public class CsvServiceImpl implements CsvService {
             while ((line = csvReader.readNext()) != null) {
                 String name = line[0];
                 String description = line[1];
-                categoryRequests.add(new CategoryRequest(null, name, description));
+                categoryRequests.add(new CategoryRequest(null, null, name, description));
             }
         }
 

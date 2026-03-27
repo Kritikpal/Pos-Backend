@@ -7,13 +7,14 @@ public class RestaurantRoute {
     public static final String BULK_UPLOAD_TABLES = "/addTableToRestaurant";
 
     public static final String GET_ALL_ITEMS = "/getAllItems";
+    public static final String GET_MENU_ITEMS_PAGE = "/api/restaurants/menu-items";
     public static final String GET_MENU_ITEM = "/getMenuItem/{id}";
     public static final String EDIT_ADD_MENU_ITEM = "/menuEdit";
     public static final String DELETE_MENU_ITEM = "/deleteMenuItem/{id}";
     public static final String DELETE_ALL_MENU_ITEMS = "/deleteAllMenuItems";
 
-
     public static final String GET_ALL_CATEGORIES = "/getAllCategories";
+    public static final String GET_CATEGORIES_PAGE = "/api/restaurants/categories";
     public static final String GET_CATEGORY = "/getCategory/{id}";
     public static final String EDIT_ADD_CATEGORY = "/saveCategory";
     public static final String DELETE_CATEGORY = "/deleteCategory/{id}";
@@ -21,6 +22,5 @@ public class RestaurantRoute {
     public static final String GET_ALL_TABLES = "/getAllTables";
     public static final String GET_TABLE = "/getTableById/{id}";
     public static final String EDIT_ADD_TABLE = "/tableEdit";
-    public static final String DELETE_TABLE = "/deleteTable";
-
+    public static final String DELETE_TABLE = "/deleteTable/{id}";
 }

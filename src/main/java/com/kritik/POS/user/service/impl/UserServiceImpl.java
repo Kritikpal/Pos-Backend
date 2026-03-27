@@ -1,6 +1,8 @@
 package com.kritik.POS.user.service.impl;
 
 import com.kritik.POS.exception.errors.BadRequestException;
+import com.kritik.POS.restaurant.entity.Restaurant;
+import com.kritik.POS.restaurant.repository.RestaurantRepository;
 import com.kritik.POS.user.entity.Role;
 import com.kritik.POS.user.entity.User;
 import com.kritik.POS.user.repository.RoleRepository;
@@ -19,6 +21,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RestaurantRepository restaurantRepository;
 
     @Override
     public void createRestaurantAdmin(Long chainId, Long restaurantId, String email, String phone, String password) {
@@ -34,11 +37,8 @@ public class UserServiceImpl implements UserService {
         user.setEmail(email);
         user.setPhoneNumber(phone);
         user.setPassword(passwordEncoder.encode(password));
-
-        // only IDs (important for decoupling)
         user.setChainId(chainId);
         user.setRestaurantId(restaurantId);
-
         user.setRoles(Set.of(role));
 
         userRepository.save(user);
@@ -85,15 +85,18 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void createStaff(Long restaurantId, String email, String phone, String password) {
-
         Role role = roleRepository.findByRoleName("STAFF")
                 .orElseThrow(() -> new RuntimeException("Role not found"));
+
+        Restaurant restaurant = restaurantRepository.findByRestaurantIdAndIsDeletedFalse(restaurantId)
+                .orElseThrow(() -> new BadRequestException("Restaurant not found"));
 
         User user = new User();
         user.setEmail(email);
         user.setPhoneNumber(phone);
         user.setPassword(passwordEncoder.encode(password));
         user.setRestaurantId(restaurantId);
+        user.setChainId(restaurant.getChainId());
         user.setRoles(Set.of(role));
 
         userRepository.save(user);

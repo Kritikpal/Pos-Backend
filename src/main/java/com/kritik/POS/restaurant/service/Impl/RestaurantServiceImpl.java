@@ -1,30 +1,42 @@
 package com.kritik.POS.restaurant.service.Impl;
 
+import com.kritik.POS.common.model.PageResponse;
 import com.kritik.POS.common.service.FileUploadService;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.order.repository.SaleItemRepository;
+import com.kritik.POS.restaurant.dto.CategoryResponseDto;
+import com.kritik.POS.restaurant.dto.MenuItemResponseDto;
 import com.kritik.POS.restaurant.entity.Category;
 import com.kritik.POS.restaurant.entity.MenuItem;
 import com.kritik.POS.restaurant.entity.ProductFile;
 import com.kritik.POS.restaurant.entity.RestaurantTable;
+import com.kritik.POS.restaurant.mapper.RestaurantDtoMapper;
 import com.kritik.POS.restaurant.models.request.CategoryRequest;
 import com.kritik.POS.restaurant.models.request.ItemRequest;
 import com.kritik.POS.restaurant.models.request.TableRequest;
 import com.kritik.POS.restaurant.models.response.CategoryResponse;
 import com.kritik.POS.restaurant.models.response.MenuResponse;
 import com.kritik.POS.restaurant.models.response.UserDashboard;
+import com.kritik.POS.restaurant.projection.CategorySummaryProjection;
+import com.kritik.POS.restaurant.projection.MenuItemSummaryProjection;
 import com.kritik.POS.restaurant.repository.CategoryRepository;
 import com.kritik.POS.restaurant.repository.MenuItemRepository;
 import com.kritik.POS.restaurant.repository.RestaurantTableRepository;
 import com.kritik.POS.restaurant.service.RestaurantService;
+import com.kritik.POS.restaurant.specification.CategorySpecification;
+import com.kritik.POS.restaurant.specification.MenuItemSpecification;
+import com.kritik.POS.restaurant.specification.RestaurantTableSpecification;
+import com.kritik.POS.security.service.TenantAccessService;
 import com.kritik.POS.tax.entity.TaxRate;
 import com.kritik.POS.tax.repository.TaxRateRepository;
 import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -32,6 +44,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 @Service
+@RequiredArgsConstructor
 public class RestaurantServiceImpl implements RestaurantService {
 
     private final MenuItemRepository menuItemRepository;
@@ -40,46 +53,78 @@ public class RestaurantServiceImpl implements RestaurantService {
     private final SaleItemRepository saleItemRepository;
     private final TaxRateRepository taxRateRepository;
     private final FileUploadService fileUploadService;
-
-    @Autowired
-    public RestaurantServiceImpl(MenuItemRepository menuItemRepository, RestaurantTableRepository tableRepository, CategoryRepository categoryRepository, SaleItemRepository saleItemRepository, TaxRateRepository taxRateRepository, FileUploadService fileUploadService) {
-        this.menuItemRepository = menuItemRepository;
-        this.tableRepository = tableRepository;
-        this.categoryRepository = categoryRepository;
-        this.saleItemRepository = saleItemRepository;
-        this.taxRateRepository = taxRateRepository;
-        this.fileUploadService = fileUploadService;
-    }
+    private final TenantAccessService tenantAccessService;
+    private final RestaurantDtoMapper restaurantDtoMapper;
 
     @Override
-    public UserDashboard userDashboard(Integer pageNumber, Integer pageSize,
-                                       String searchString, Long categoryId) {
-
+    public UserDashboard userDashboard(Integer pageNumber, Integer pageSize, String searchString, Long categoryId) {
         Pageable pageable = PageRequest.of(pageNumber, pageSize);
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+        if (!tenantAccessService.isSuperAdmin() && accessibleRestaurantIds.isEmpty()) {
+            return new UserDashboard(List.of(), List.of());
+        }
 
-        Page<MenuItem> menuItems =
-                menuItemRepository.searchDashboardItems(searchString, categoryId, pageable);
+        Page<MenuItem> menuItems = menuItemRepository.searchDashboardItems(
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+                normalizeSearch(searchString),
+                categoryId,
+                pageable
+        );
 
-        List<TaxRate> taxes = taxRateRepository.findAllByIsActiveTrue();
+        List<TaxRate> taxes = taxRateRepository.findAllActiveVisible(
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds)
+        );
 
         return new UserDashboard(menuItems.getContent(), taxes);
     }
 
     @Override
     public List<MenuResponse> getMenuItems() throws AppException {
-        List<MenuItem> allItems = menuItemRepository.findAll();
-        return allItems.stream().map(MenuResponse::buildResponseFromMenu).toList();
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+        Specification<MenuItem> specification = Specification.where(MenuItemSpecification.notDeleted());
+        if (!tenantAccessService.isSuperAdmin()) {
+            if (accessibleRestaurantIds.isEmpty()) {
+                return List.of();
+            }
+            specification = specification.and(MenuItemSpecification.belongsToRestaurants(accessibleRestaurantIds));
+        }
+        return menuItemRepository.findAll(
+                        specification,
+                        Sort.by(Sort.Direction.DESC, "isTrending", "updatedAt", "createdAt")
+                ).stream()
+                .map(MenuResponse::buildResponseFromMenu)
+                .toList();
+    }
+
+    @Override
+    public PageResponse<MenuItemResponseDto> getMenuItemPage(Long chainId, Long restaurantId, Boolean isActive, String search, Integer pageNumber, Integer pageSize) {
+        Pageable pageable = PageRequest.of(pageNumber, pageSize);
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(chainId, restaurantId);
+        if (!tenantAccessService.isSuperAdmin() && accessibleRestaurantIds.isEmpty()) {
+            return new PageResponse<>(List.of(), pageNumber, pageSize, 0, 0, true);
+        }
+
+        Page<MenuItemSummaryProjection> page = menuItemRepository.findMenuItemSummaries(
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+                isActive,
+                normalizeSearch(search),
+                pageable
+        );
+
+        return PageResponse.from(page.map(restaurantDtoMapper::toMenuItemDto));
     }
 
     @Override
     public MenuResponse getMenuItemById(Long itemId) throws AppException {
-        MenuItem menuItem = menuItemRepository.findById(itemId).orElseThrow(() -> new AppException("Invalid Item Id", HttpStatus.BAD_REQUEST));
-        return MenuResponse.buildResponseFromMenu(menuItem);
+        return MenuResponse.buildResponseFromMenu(getMenuItemEntity(itemId));
     }
 
     @Override
     public MenuResponse addEditMenuItem(ItemRequest itemRequest, MultipartFile productImage) throws AppException {
-        MenuItem menuItem = createMenuIteFromRequest(itemRequest);
+        MenuItem menuItem = createMenuItemFromRequest(itemRequest);
         if (productImage != null && !productImage.isEmpty()) {
             ProductFile productFile = fileUploadService.uploadFile(productImage);
             menuItem.setProductImage(productFile);
@@ -91,45 +136,48 @@ public class RestaurantServiceImpl implements RestaurantService {
     @Transactional
     @Override
     public boolean deleteMenuItem(Long menuItemId) throws AppException {
-        MenuItem menuItem = menuItemRepository.findById(menuItemId).orElseThrow(() -> new AppException("Invalid Item Id", HttpStatus.BAD_REQUEST));
+        MenuItem menuItem = getMenuItemEntity(menuItemId);
         List<SaleItem> saleItems = menuItem.getSaleItems().stream().peek(saleItem -> saleItem.setMenuItem(null)).toList();
         saleItemRepository.saveAll(saleItems);
-        menuItemRepository.delete(menuItem);
+        menuItem.setIsDeleted(true);
+        menuItem.setIsActive(false);
+        if (menuItem.getItemStock() != null) {
+            menuItem.getItemStock().setIsDeleted(true);
+            menuItem.getItemStock().setIsActive(false);
+        }
+        menuItemRepository.save(menuItem);
         return true;
     }
-
 
     @Transactional
     @Override
     public boolean deleteAllItems() throws AppException {
-        for (MenuItem menuItem : menuItemRepository.findAll()) {
-            List<SaleItem> saleItems = menuItem.getSaleItems().stream().peek(saleItem -> saleItem.setMenuItem(null)).toList();
-            saleItemRepository.saveAll(saleItems);
-            menuItemRepository.delete(menuItem);
+        for (MenuItem menuItem : getAccessibleMenuItemEntities()) {
+            deleteMenuItem(menuItem.getId());
         }
-        categoryRepository.deleteAll();
+        for (Category category : getAccessibleCategoryEntities()) {
+            category.setIsDeleted(true);
+            category.setIsActive(false);
+            categoryRepository.save(category);
+        }
         return true;
-    }
-
-    private MenuItem createMenuIteFromRequest(ItemRequest itemRequest) {
-        MenuItem menuItem;
-        if (itemRequest.itemId() == null) {
-            menuItem = new MenuItem();
-        } else {
-            menuItem = menuItemRepository.findById(itemRequest.itemId()).orElseThrow(() -> new AppException("Invalid Item Id", HttpStatus.BAD_REQUEST));
-        }
-        Category category = categoryRepository.findById(itemRequest.categoryId()).orElseThrow(() -> new AppException("Invalid Category Id" + itemRequest.categoryId(), HttpStatus.BAD_GATEWAY));
-        return itemRequest.createMenuItemFromRequest(menuItem, category);
     }
 
     @Override
     public List<RestaurantTable> getAllTables() throws AppException {
-        return tableRepository.findAll();
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+        if (!tenantAccessService.isSuperAdmin() && accessibleRestaurantIds.isEmpty()) {
+            return List.of();
+        }
+        return tableRepository.findVisibleTables(
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds)
+        );
     }
 
     @Override
     public RestaurantTable getTableById(Long tableId) throws AppException {
-        return tableRepository.findById(tableId).orElseThrow(() -> new AppException("Table Id not found", HttpStatus.BAD_REQUEST));
+        return getTableEntity(tableId);
     }
 
     @Override
@@ -139,31 +187,49 @@ public class RestaurantServiceImpl implements RestaurantService {
 
     @Override
     public boolean deleteTable(Long tableId) throws AppException {
-        RestaurantTable table = getTableById(tableId);
-        tableRepository.delete(table);
+        RestaurantTable table = getTableEntity(tableId);
+        table.setIsDeleted(true);
+        table.setIsActive(false);
+        tableRepository.save(table);
         return true;
     }
 
-    private RestaurantTable createTableFromRequest(TableRequest tableRequest) {
-        RestaurantTable restaurantTable = new RestaurantTable();
-        if (tableRequest.tableId() != null) {
-            restaurantTable = getTableById(tableRequest.tableId());
-        }
-        restaurantTable.setTableNumber(tableRequest.tableNumber());
-        restaurantTable.setSeats(tableRequest.noOfSeat());
-        return restaurantTable;
-    }
-
-
     @Override
     public List<CategoryResponse> getAllCategories() throws AppException {
-        return categoryRepository.findAll().stream().map(CategoryResponse::buildCategoryResponse).toList();
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+        Specification<Category> specification = Specification.where(CategorySpecification.notDeleted());
+        if (!tenantAccessService.isSuperAdmin()) {
+            if (accessibleRestaurantIds.isEmpty()) {
+                return List.of();
+            }
+            specification = specification.and(CategorySpecification.belongsToRestaurants(accessibleRestaurantIds));
+        }
+        return categoryRepository.findAll(specification, Sort.by(Sort.Direction.DESC, "updatedAt", "createdAt"))
+                .stream()
+                .map(CategoryResponse::buildCategoryResponse)
+                .toList();
+    }
+
+    @Override
+    public PageResponse<CategoryResponseDto> getCategoryPage(Long chainId, Long restaurantId, Boolean isActive, String search, Integer pageNumber, Integer pageSize) {
+        Pageable pageable = PageRequest.of(pageNumber, pageSize);
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(chainId, restaurantId);
+        if (!tenantAccessService.isSuperAdmin() && accessibleRestaurantIds.isEmpty()) {
+            return new PageResponse<>(List.of(), pageNumber, pageSize, 0, 0, true);
+        }
+        Page<CategorySummaryProjection> page = categoryRepository.findCategorySummaries(
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+                isActive,
+                normalizeSearch(search),
+                pageable
+        );
+        return PageResponse.from(page.map(restaurantDtoMapper::toCategoryDto));
     }
 
     @Override
     public CategoryResponse getCategoryById(Long categoryId) throws AppException {
-        Category category = categoryRepository.findById(categoryId).orElseThrow(() -> new AppException("Invalid CategoryId", HttpStatus.BAD_REQUEST));
-        return CategoryResponse.buildCategoryResponse(category);
+        return CategoryResponse.buildCategoryResponse(getCategoryEntity(categoryId));
     }
 
     @Override
@@ -176,21 +242,115 @@ public class RestaurantServiceImpl implements RestaurantService {
     @Override
     @Transactional
     public boolean deleteCategory(Long categoryId) throws AppException {
-        Category category = categoryRepository.findById(categoryId).orElseThrow(() -> new AppException("Invalid Category id", HttpStatus.BAD_REQUEST));
+        Category category = getCategoryEntity(categoryId);
         for (MenuItem menuItem : category.getMenuItems()) {
-            deleteMenuItem(menuItem.getId());
+            if (!Boolean.TRUE.equals(menuItem.getIsDeleted())) {
+                deleteMenuItem(menuItem.getId());
+            }
         }
-        categoryRepository.deleteById(categoryId);
+        category.setIsDeleted(true);
+        category.setIsActive(false);
+        categoryRepository.save(category);
         return true;
     }
 
-    private Category createCategoryFromRequest(CategoryRequest categoryRequest) {
-        Category category = new Category();
-        if (categoryRequest.categoryId() != null) {
-            category = categoryRepository.findById(categoryRequest.categoryId()).orElseThrow(() -> new AppException("Invalid Category id", HttpStatus.BAD_REQUEST));
+    private MenuItem createMenuItemFromRequest(ItemRequest itemRequest) {
+        MenuItem menuItem = itemRequest.itemId() == null ? new MenuItem() : getMenuItemEntity(itemRequest.itemId());
+        Category category = getCategoryEntity(itemRequest.categoryId());
+        MenuItem updatedMenuItem = itemRequest.createMenuItemFromRequest(menuItem, category);
+        updatedMenuItem.setRestaurantId(category.getRestaurantId());
+        updatedMenuItem.setIsDeleted(false);
+        if (updatedMenuItem.getItemStock() != null) {
+            updatedMenuItem.getItemStock().setRestaurantId(category.getRestaurantId());
+            updatedMenuItem.getItemStock().setIsDeleted(false);
+            updatedMenuItem.getItemStock().setIsActive(true);
         }
+        return updatedMenuItem;
+    }
+
+    private RestaurantTable createTableFromRequest(TableRequest tableRequest) {
+        RestaurantTable restaurantTable = tableRequest.tableId() == null ? new RestaurantTable() : getTableEntity(tableRequest.tableId());
+        restaurantTable.setTableNumber(tableRequest.tableNumber());
+        restaurantTable.setSeats(tableRequest.noOfSeat());
+        restaurantTable.setRestaurantId(tenantAccessService.resolveAccessibleRestaurantId(
+                tableRequest.restaurantId() != null ? tableRequest.restaurantId() : restaurantTable.getRestaurantId()
+        ));
+        restaurantTable.setIsDeleted(false);
+        return restaurantTable;
+    }
+
+    private Category createCategoryFromRequest(CategoryRequest categoryRequest) {
+        Category category = categoryRequest.categoryId() == null ? new Category() : getCategoryEntity(categoryRequest.categoryId());
         category.setCategoryDescription(categoryRequest.categoryDescription());
         category.setCategoryName(categoryRequest.categoryName());
+        category.setRestaurantId(tenantAccessService.resolveAccessibleRestaurantId(
+                categoryRequest.restaurantId() != null ? categoryRequest.restaurantId() : category.getRestaurantId()
+        ));
+        category.setIsDeleted(false);
         return category;
+    }
+
+    private List<MenuItem> getAccessibleMenuItemEntities() {
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+        Specification<MenuItem> specification = Specification.where(MenuItemSpecification.notDeleted());
+        if (!tenantAccessService.isSuperAdmin()) {
+            if (accessibleRestaurantIds.isEmpty()) {
+                return List.of();
+            }
+            specification = specification.and(MenuItemSpecification.belongsToRestaurants(accessibleRestaurantIds));
+        }
+        return menuItemRepository.findAll(specification);
+    }
+
+    private List<Category> getAccessibleCategoryEntities() {
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+        Specification<Category> specification = Specification.where(CategorySpecification.notDeleted());
+        if (!tenantAccessService.isSuperAdmin()) {
+            if (accessibleRestaurantIds.isEmpty()) {
+                return List.of();
+            }
+            specification = specification.and(CategorySpecification.belongsToRestaurants(accessibleRestaurantIds));
+        }
+        return categoryRepository.findAll(specification);
+    }
+
+    private MenuItem getMenuItemEntity(Long itemId) {
+        Specification<MenuItem> specification = Specification.where(MenuItemSpecification.hasId(itemId))
+                .and(MenuItemSpecification.notDeleted());
+        if (!tenantAccessService.isSuperAdmin()) {
+            specification = specification.and(
+                    MenuItemSpecification.belongsToRestaurants(tenantAccessService.resolveAccessibleRestaurantIds(null, null))
+            );
+        }
+        return menuItemRepository.findOne(specification)
+                .orElseThrow(() -> new AppException("Invalid Item Id", HttpStatus.BAD_REQUEST));
+    }
+
+    private Category getCategoryEntity(Long categoryId) {
+        Specification<Category> specification = Specification.where(CategorySpecification.hasId(categoryId))
+                .and(CategorySpecification.notDeleted());
+        if (!tenantAccessService.isSuperAdmin()) {
+            specification = specification.and(
+                    CategorySpecification.belongsToRestaurants(tenantAccessService.resolveAccessibleRestaurantIds(null, null))
+            );
+        }
+        return categoryRepository.findOne(specification)
+                .orElseThrow(() -> new AppException("Invalid Category id", HttpStatus.BAD_REQUEST));
+    }
+
+    private RestaurantTable getTableEntity(Long tableId) {
+        Specification<RestaurantTable> specification = Specification.where(RestaurantTableSpecification.hasId(tableId))
+                .and(RestaurantTableSpecification.notDeleted());
+        if (!tenantAccessService.isSuperAdmin()) {
+            specification = specification.and(
+                    RestaurantTableSpecification.belongsToRestaurants(tenantAccessService.resolveAccessibleRestaurantIds(null, null))
+            );
+        }
+        return tableRepository.findOne(specification)
+                .orElseThrow(() -> new AppException("Table Id not found", HttpStatus.BAD_REQUEST));
+    }
+
+    private String normalizeSearch(String searchString) {
+        return searchString == null ? null : searchString.trim();
     }
 }

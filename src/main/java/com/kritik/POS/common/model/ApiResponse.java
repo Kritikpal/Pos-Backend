@@ -10,11 +10,13 @@ import lombok.ToString;
 @Getter
 @ToString
 public class ApiResponse<T> {
+    boolean success;
     T data;
     ResponseCode responseCode;
     String message;
 
     public ApiResponse(T data, ResponseCode responseCode, String message) {
+        this.success = ResponseCode.SUCCESS.equals(responseCode);
         this.data = data;
         this.responseCode = responseCode;
         this.message = message;

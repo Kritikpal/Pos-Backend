@@ -10,6 +10,7 @@ import java.util.Set;
 public class LoginResponse {
     private String accessToken;
     private String refreshToken;
+    private String role;
     private Set<String> roles;
     private Long restaurantId;
     private Long chainId;
