@@ -4,11 +4,11 @@ import static com.kritik.POS.admin.route.AdminRoute.GET_ENDING_STOCK;
 import static com.kritik.POS.admin.route.AdminRoute.GET_LAST5_PAYMENTS;
 import static com.kritik.POS.admin.route.AdminRoute.MOST_ORDERED_ITEM;
 
-import com.kritik.POS.admin.models.response.MostOrderedMenu;
 import com.kritik.POS.admin.models.response.OrderResponse;
 import com.kritik.POS.admin.models.response.ShortReport;
 import com.kritik.POS.admin.route.AdminRoute;
 import com.kritik.POS.admin.service.AdminPaymentService;
+import com.kritik.POS.admin.views.projection.MostOrderedMenuProjection;
 import com.kritik.POS.common.model.ApiResponse;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
@@ -19,8 +19,10 @@ import com.kritik.POS.restaurant.service.StockService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+
 import java.time.LocalDate;
 import java.util.List;
+
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -80,11 +82,14 @@ public class AdminController {
     }
 
     @GetMapping(MOST_ORDERED_ITEM)
-    public ResponseEntity<ApiResponse<List<MostOrderedMenu>>> mostOrderedItem(
-            @RequestParam(name = "lastDays", defaultValue = "7") @Min(value = 1, message = "lastDays must be at least 1") @Max(value = 365, message = "lastDays must be 365 or less") Integer lastDays,
-            @RequestParam(name = "limit", defaultValue = "5") @Min(value = 1, message = "limit must be at least 1") @Max(value = 100, message = "limit must be 100 or less") Integer limit
+    public ResponseEntity<ApiResponse<List<MostOrderedMenuProjection>>> mostOrderedItem(
+            @RequestParam(name = "lastDays", defaultValue = "7") @Min(value = 1, message = "lastDays must be at least 1")
+            @Max(value = 365, message = "lastDays must be 365 or less") Integer lastDays,
+            @RequestParam(name = "limit", defaultValue = "5")
+            @Min(value = 1, message = "limit must be at least 1")
+            @Max(value = 100, message = "limit must be 100 or less") Integer limit
     ) {
-        List<MostOrderedMenu> mostOrderedItem = adminPaymentService.getMostOrderedItem(lastDays, limit);
+        List<MostOrderedMenuProjection> mostOrderedItem = adminPaymentService.getMostOrderedItem(lastDays, limit);
         return ResponseEntity.ok(ApiResponse.SUCCESS(mostOrderedItem));
     }
 }

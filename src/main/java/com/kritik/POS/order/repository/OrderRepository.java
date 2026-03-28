@@ -4,13 +4,12 @@ import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
 import com.kritik.POS.order.model.response.LastOrderListItemProjection;
-import com.kritik.POS.order.model.response.PaymentByHour;
+import com.kritik.POS.order.model.response.PaymentByHourProjection;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
@@ -38,28 +37,26 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             """)
     Optional<Order> findByOrderIdWithItems(@Param("orderId") String orderId);
 
-    @Query("""
-    SELECT new com.kritik.POS.order.model.response.PaymentByHour(
-        EXTRACT(HOUR FROM o.paymentInitiatedTime),
-        COUNT(o.id)
-    )
-    FROM Order o
-    WHERE o.paymentStatus = :status
-      AND (:skipRestaurantFilter = true OR o.restaurantId IN :restaurantIds)
-      AND o.isDeleted = false
-      AND o.paymentInitiatedTime >= :start
-      AND o.paymentInitiatedTime < :end
-    GROUP BY EXTRACT(HOUR FROM o.paymentInitiatedTime)
-    ORDER BY EXTRACT(HOUR FROM o.paymentInitiatedTime)
-""")
-    List<PaymentByHour> countPaymentsByHour(
-            @Param("status") PaymentStatus paymentStatus,
+    @Query(value = """
+            SELECT
+                CAST(EXTRACT(HOUR FROM o.last_updated_time) AS INTEGER) AS hourOfDay,
+                COUNT(o.id) AS numberOfPayments
+            FROM orders o
+            WHERE o.payment_status = :paymentStatus
+              AND (:skipRestaurantFilter = true OR o.restaurant_id IN (:restaurantIds))
+              AND o.is_deleted = false
+              AND o.last_updated_time >= :start
+              AND o.last_updated_time < :end
+            GROUP BY CAST(EXTRACT(HOUR FROM o.last_updated_time) AS INTEGER)
+            ORDER BY CAST(EXTRACT(HOUR FROM o.last_updated_time) AS INTEGER)
+            """, nativeQuery = true)
+    List<PaymentByHourProjection> countPaymentsByHour(
+            @Param("paymentStatus") Integer paymentStatus,
             @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
             @Param("restaurantIds") Collection<Long> restaurantIds,
             @Param("start") LocalDateTime start,
             @Param("end") LocalDateTime end
     );
-
 
     @Query("""
             SELECT DISTINCT o FROM Order o
@@ -121,13 +118,14 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             where o.paymentStatus = :paymentStatus
               and (:skipRestaurantFilter = true or o.restaurantId in :restaurantIds)
               and o.isDeleted = false
-              and o.lastUpdatedTime between :startTime and :endTime
+              and o.lastUpdatedTime >= :startTime
+              and o.lastUpdatedTime < :endTime
             """)
-    long countByPaymentStatusAndLastUpdatedTimeBetween(@Param("paymentStatus") PaymentStatus paymentStatus,
-                                                       @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
-                                                       @Param("restaurantIds") Collection<Long> restaurantIds,
-                                                       @Param("startTime") LocalDateTime startTime,
-                                                       @Param("endTime") LocalDateTime endTime);
+    long countByPaymentStatusForReportWindow(@Param("paymentStatus") PaymentStatus paymentStatus,
+                                             @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                             @Param("restaurantIds") Collection<Long> restaurantIds,
+                                             @Param("startTime") LocalDateTime startTime,
+                                             @Param("endTime") LocalDateTime endTime);
 
     @Query("""
             select count(o)
@@ -146,29 +144,48 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("""
             SELECT AVG(o.totalPrice)
             FROM Order o
-            WHERE o.paymentInitiatedTime BETWEEN :startOfDay AND :endOfDay
+            WHERE o.lastUpdatedTime >= :startTime
+              AND o.lastUpdatedTime < :endTime
               AND o.paymentStatus = :paymentStatus
               AND (:skipRestaurantFilter = true OR o.restaurantId IN :restaurantIds)
               AND o.isDeleted = false
             """)
-    Double findAverageOrderValueByDateAndPaymentType(@Param("startOfDay") LocalDateTime startOfDay,
-                                                     @Param("endOfDay") LocalDateTime endOfDay,
-                                                     @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
-                                                     @Param("restaurantIds") Collection<Long> restaurantIds,
-                                                     @Param("paymentStatus") PaymentStatus paymentStatus);
+    Double findAverageOrderValueByPaymentStatusForReportWindow(@Param("startTime") LocalDateTime startTime,
+                                                               @Param("endTime") LocalDateTime endTime,
+                                                               @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                                               @Param("restaurantIds") Collection<Long> restaurantIds,
+                                                               @Param("paymentStatus") PaymentStatus paymentStatus);
 
 
     @Query("""
             SELECT SUM(o.totalPrice)
             FROM Order o
-            WHERE o.lastUpdatedTime BETWEEN :startDateTime AND :endDateTime
+            WHERE o.lastUpdatedTime >= :startTime
+              AND o.lastUpdatedTime < :endTime
               AND o.paymentStatus = :paymentStatus
               AND (:skipRestaurantFilter = true OR o.restaurantId IN :restaurantIds)
               AND o.isDeleted = false
             """)
-    Double getTotalAmountByLastUpdatedTimeAndPaymentStatus(@Param("startDateTime") LocalDateTime startDateTime,
-                                                           @Param("endDateTime") LocalDateTime endDateTime,
-                                                           @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
-                                                           @Param("restaurantIds") Collection<Long> restaurantIds,
-                                                           @Param("paymentStatus") PaymentStatus paymentStatus);
+    Double getTotalAmountByPaymentStatusForReportWindow(@Param("startTime") LocalDateTime startTime,
+                                                        @Param("endTime") LocalDateTime endTime,
+                                                        @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                                        @Param("restaurantIds") Collection<Long> restaurantIds,
+                                                        @Param("paymentStatus") PaymentStatus paymentStatus);
+
+    @Query("""
+            SELECT o.totalPrice
+            FROM Order o
+            WHERE o.paymentStatus = :paymentStatus
+              AND (:skipRestaurantFilter = true OR o.restaurantId IN :restaurantIds)
+              AND o.isDeleted = false
+              AND o.lastUpdatedTime >= :startTime
+              AND o.lastUpdatedTime < :endTime
+            ORDER BY o.lastUpdatedTime DESC, o.id DESC
+            """)
+    List<Double> findLatestOrderAmountsByPaymentStatusForReportWindow(@Param("paymentStatus") PaymentStatus paymentStatus,
+                                                                      @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                                                      @Param("restaurantIds") Collection<Long> restaurantIds,
+                                                                      @Param("startTime") LocalDateTime startTime,
+                                                                      @Param("endTime") LocalDateTime endTime,
+                                                                      Pageable pageable);
 }

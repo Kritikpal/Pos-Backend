@@ -9,7 +9,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 public class ShortReport {
     private Long totalOrderCount;
-    private Long refundCount;
+    private Long cancelCount;
     private double lastOrderAmount;
     private double totalAmountEarned;
     private double averageOrderValue;
