@@ -1,6 +1,6 @@
-package com.kritik.POS.restaurant.repository;
+package com.kritik.POS.inventory.repository;
 
-import com.kritik.POS.restaurant.entity.IngredientStock;
+import com.kritik.POS.inventory.entity.IngredientStock;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;

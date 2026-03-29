@@ -1,8 +1,8 @@
 package com.kritik.POS.restaurant.models.response;
 
 import com.kritik.POS.restaurant.entity.ItemPrice;
-import com.kritik.POS.restaurant.entity.ItemStock;
-import com.kritik.POS.restaurant.entity.MenuItemIngredient;
+import com.kritik.POS.inventory.entity.ItemStock;
+import com.kritik.POS.inventory.entity.MenuItemIngredient;
 import com.kritik.POS.restaurant.entity.MenuItem;
 import com.kritik.POS.restaurant.util.InventoryAvailabilityUtil;
 import com.kritik.POS.restaurant.util.RestaurantUtil;

@@ -1,7 +1,7 @@
-package com.kritik.POS.restaurant.repository;
+package com.kritik.POS.inventory.repository;
 
-import com.kritik.POS.restaurant.entity.StockReceipt;
-import com.kritik.POS.restaurant.projection.StockReceiptSummaryProjection;
+import com.kritik.POS.inventory.entity.StockReceipt;
+import com.kritik.POS.inventory.projection.StockReceiptSummaryProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;

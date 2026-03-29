@@ -1,6 +1,8 @@
 package com.kritik.POS.restaurant.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.kritik.POS.inventory.entity.ItemStock;
+import com.kritik.POS.inventory.entity.MenuItemIngredient;
 import com.kritik.POS.order.entity.SaleItem;
 import jakarta.persistence.*;
 import lombok.Data;

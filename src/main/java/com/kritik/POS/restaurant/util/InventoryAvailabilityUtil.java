@@ -1,8 +1,8 @@
 package com.kritik.POS.restaurant.util;
 
-import com.kritik.POS.restaurant.entity.IngredientStock;
+import com.kritik.POS.inventory.entity.IngredientStock;
 import com.kritik.POS.restaurant.entity.MenuItem;
-import com.kritik.POS.restaurant.entity.MenuItemIngredient;
+import com.kritik.POS.inventory.entity.MenuItemIngredient;
 
 import java.util.List;
 

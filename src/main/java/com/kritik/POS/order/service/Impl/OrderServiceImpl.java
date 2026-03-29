@@ -15,13 +15,12 @@ import com.kritik.POS.order.model.response.PaymentProcessingResponse;
 import com.kritik.POS.order.repository.OrderRepository;
 import com.kritik.POS.order.service.OrderService;
 import com.kritik.POS.order.util.OrderUtil;
-import com.kritik.POS.restaurant.entity.IngredientStock;
+import com.kritik.POS.inventory.entity.IngredientStock;
 import com.kritik.POS.restaurant.entity.MenuItem;
-import com.kritik.POS.restaurant.entity.MenuItemIngredient;
+import com.kritik.POS.inventory.entity.MenuItemIngredient;
 import com.kritik.POS.restaurant.models.request.StockRequest;
-import com.kritik.POS.restaurant.repository.IngredientStockRepository;
+import com.kritik.POS.inventory.repository.IngredientStockRepository;
 import com.kritik.POS.restaurant.repository.MenuItemRepository;
-import com.kritik.POS.restaurant.specification.MenuItemSpecification;
 import com.kritik.POS.restaurant.util.InventoryAvailabilityUtil;
 import com.kritik.POS.restaurant.util.RestaurantUtil;
 import com.kritik.POS.security.service.TenantAccessService;
@@ -30,7 +29,6 @@ import com.kritik.POS.tax.service.TaxService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -63,7 +61,7 @@ public class OrderServiceImpl implements OrderService {
         Long orderRestaurantId = null;
 
         for (InitiateOrderRequest.OrderItemRequest orderItemRequest : initiateOrderRequest.getOrderItems()) {
-            MenuItem menuItem = getAccessibleMenuItem(orderItemRequest.menuItemId());
+            MenuItem menuItem = inventoryService.getAccessibleMenuItem(orderItemRequest.menuItemId());
             if (orderRestaurantId == null) {
                 orderRestaurantId = menuItem.getRestaurantId();
             } else if (!orderRestaurantId.equals(menuItem.getRestaurantId())) {
@@ -177,17 +175,6 @@ public class OrderServiceImpl implements OrderService {
         throw new OrderException("Payment has not been completed yet");
     }
 
-    private MenuItem getAccessibleMenuItem(Long menuItemId) {
-        Specification<MenuItem> specification = Specification.where(MenuItemSpecification.hasId(menuItemId))
-                .and(MenuItemSpecification.notDeleted());
-        if (!tenantAccessService.isSuperAdmin()) {
-            specification = specification.and(
-                    MenuItemSpecification.belongsToRestaurants(tenantAccessService.resolveAccessibleRestaurantIds(null, null))
-            );
-        }
-        return menuItemRepository.findOne(specification)
-                .orElseThrow(() -> new AppException("Menu Item is not valid", HttpStatus.BAD_REQUEST));
-    }
 
     private Order getAccessibleOrder(String orderId) {
         Order order = orderRepository.findByOrderId(orderId).orElseThrow(OrderException::new);

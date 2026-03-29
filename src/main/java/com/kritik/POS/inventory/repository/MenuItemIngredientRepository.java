@@ -1,6 +1,6 @@
-package com.kritik.POS.restaurant.repository;
+package com.kritik.POS.inventory.repository;
 
-import com.kritik.POS.restaurant.entity.MenuItemIngredient;
+import com.kritik.POS.inventory.entity.MenuItemIngredient;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 

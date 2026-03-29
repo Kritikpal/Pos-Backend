@@ -1,4 +1,4 @@
-package com.kritik.POS.restaurant.projection;
+package com.kritik.POS.inventory.projection;
 
 import java.time.LocalDateTime;
 

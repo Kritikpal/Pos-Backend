@@ -1,4 +1,5 @@
-package com.kritik.POS.restaurant.entity;
+package com.kritik.POS.inventory.entity;
+import com.kritik.POS.restaurant.entity.MenuItem;
 import jakarta.persistence.*;
 import lombok.Data;
 

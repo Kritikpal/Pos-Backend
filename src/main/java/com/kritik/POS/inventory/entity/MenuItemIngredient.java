@@ -1,5 +1,6 @@
-package com.kritik.POS.restaurant.entity;
+package com.kritik.POS.inventory.entity;
 
+import com.kritik.POS.restaurant.entity.MenuItem;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;

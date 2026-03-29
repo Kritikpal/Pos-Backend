@@ -30,7 +30,7 @@ public record StockReceiptCreateRequest(
             @Min(value = 1, message = "Quantity received must be at least 1")
             Integer quantityReceived,
             @NotNull(message = "Unit cost is required")
-            @DecimalMin(value = "0.0", inclusive = true, message = "Unit cost must be 0 or greater")
+            @DecimalMin(value = "0.0", message = "Unit cost must be 0 or greater")
             Double unitCost
     ) {
     }

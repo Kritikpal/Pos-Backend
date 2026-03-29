@@ -1,4 +1,4 @@
-package com.kritik.POS.restaurant.entity;
+package com.kritik.POS.inventory.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
