@@ -8,7 +8,9 @@ import com.kritik.POS.order.repository.SaleItemRepository;
 import com.kritik.POS.restaurant.dto.CategoryResponseDto;
 import com.kritik.POS.restaurant.dto.MenuItemResponseDto;
 import com.kritik.POS.restaurant.entity.Category;
+import com.kritik.POS.restaurant.entity.IngredientStock;
 import com.kritik.POS.restaurant.entity.MenuItem;
+import com.kritik.POS.restaurant.entity.MenuItemIngredient;
 import com.kritik.POS.restaurant.entity.ProductFile;
 import com.kritik.POS.restaurant.entity.RestaurantTable;
 import com.kritik.POS.restaurant.mapper.RestaurantDtoMapper;
@@ -20,15 +22,18 @@ import com.kritik.POS.restaurant.models.response.MenuResponse;
 import com.kritik.POS.restaurant.models.response.UserDashboard;
 import com.kritik.POS.restaurant.projection.CategorySummaryProjection;
 import com.kritik.POS.restaurant.projection.MenuItemSummaryProjection;
+import com.kritik.POS.restaurant.projection.UserDashboardMenuItemProjection;
 import com.kritik.POS.restaurant.repository.CategoryRepository;
+import com.kritik.POS.restaurant.repository.IngredientStockRepository;
 import com.kritik.POS.restaurant.repository.MenuItemRepository;
 import com.kritik.POS.restaurant.repository.RestaurantTableRepository;
 import com.kritik.POS.restaurant.service.RestaurantService;
 import com.kritik.POS.restaurant.specification.CategorySpecification;
 import com.kritik.POS.restaurant.specification.MenuItemSpecification;
 import com.kritik.POS.restaurant.specification.RestaurantTableSpecification;
+import com.kritik.POS.restaurant.util.InventoryAvailabilityUtil;
 import com.kritik.POS.security.service.TenantAccessService;
-import com.kritik.POS.tax.entity.TaxRate;
+import com.kritik.POS.tax.projection.ActiveTaxRateProjection;
 import com.kritik.POS.tax.repository.TaxRateRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -41,7 +46,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +66,7 @@ public class RestaurantServiceImpl implements RestaurantService {
     private final FileUploadService fileUploadService;
     private final TenantAccessService tenantAccessService;
     private final RestaurantDtoMapper restaurantDtoMapper;
+    private final IngredientStockRepository ingredientStockRepository;
 
     @Override
     public UserDashboard userDashboard(Integer pageNumber, Integer pageSize, String searchString, Long categoryId) {
@@ -64,7 +76,7 @@ public class RestaurantServiceImpl implements RestaurantService {
             return new UserDashboard(List.of(), List.of());
         }
 
-        Page<MenuItem> menuItems = menuItemRepository.searchDashboardItems(
+        Page<UserDashboardMenuItemProjection> menuItems = menuItemRepository.findDashboardItems(
                 tenantAccessService.isSuperAdmin(),
                 tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
                 normalizeSearch(searchString),
@@ -72,7 +84,7 @@ public class RestaurantServiceImpl implements RestaurantService {
                 pageable
         );
 
-        List<TaxRate> taxes = taxRateRepository.findAllActiveVisible(
+        List<ActiveTaxRateProjection> taxes = taxRateRepository.findActiveTaxRateSummaries(
                 tenantAccessService.isSuperAdmin(),
                 tenantAccessService.queryRestaurantIds(accessibleRestaurantIds)
         );
@@ -260,11 +272,8 @@ public class RestaurantServiceImpl implements RestaurantService {
         MenuItem updatedMenuItem = itemRequest.createMenuItemFromRequest(menuItem, category);
         updatedMenuItem.setRestaurantId(category.getRestaurantId());
         updatedMenuItem.setIsDeleted(false);
-        if (updatedMenuItem.getItemStock() != null) {
-            updatedMenuItem.getItemStock().setRestaurantId(category.getRestaurantId());
-            updatedMenuItem.getItemStock().setIsDeleted(false);
-            updatedMenuItem.getItemStock().setIsActive(true);
-        }
+        replaceIngredientRecipe(updatedMenuItem, itemRequest.ingredients(), category.getRestaurantId());
+        syncMenuAvailability(updatedMenuItem);
         return updatedMenuItem;
     }
 
@@ -352,5 +361,68 @@ public class RestaurantServiceImpl implements RestaurantService {
 
     private String normalizeSearch(String searchString) {
         return searchString == null ? null : searchString.trim();
+    }
+
+    private void replaceIngredientRecipe(MenuItem menuItem, List<ItemRequest.IngredientUsageRequest> ingredientRequests, Long restaurantId) {
+        if (ingredientRequests == null) {
+            return;
+        }
+
+        if (menuItem.getIngredientUsages() == null) {
+            menuItem.setIngredientUsages(new ArrayList<>());
+        }
+
+        Map<String, MenuItemIngredient> existingUsages = new LinkedHashMap<>();
+        for (MenuItemIngredient existingUsage : menuItem.getIngredientUsages()) {
+            existingUsages.put(existingUsage.getIngredientStock().getSku(), existingUsage);
+        }
+
+        Set<String> addedSkus = new HashSet<>();
+        List<MenuItemIngredient> nextUsages = new ArrayList<>();
+        for (ItemRequest.IngredientUsageRequest ingredientRequest : ingredientRequests) {
+            if (!addedSkus.add(ingredientRequest.ingredientSku())) {
+                // Skip duplicate ingredient sku
+                continue;
+            }
+            IngredientStock ingredientStock = ingredientStockRepository.findBySkuAndIsDeletedFalse(ingredientRequest.ingredientSku())
+                    .orElseThrow(() -> new AppException("Invalid ingredient sku", HttpStatus.BAD_REQUEST));
+            if (!restaurantId.equals(ingredientStock.getRestaurantId())) {
+                throw new AppException("Ingredient does not belong to the selected restaurant", HttpStatus.BAD_REQUEST);
+            }
+
+            MenuItemIngredient ingredientUsage = existingUsages.getOrDefault(ingredientRequest.ingredientSku(), new MenuItemIngredient());
+            ingredientUsage.setMenuItem(menuItem);
+            ingredientUsage.setIngredientStock(ingredientStock);
+            ingredientUsage.setQuantityRequired(ingredientRequest.quantityRequired());
+            nextUsages.add(ingredientUsage);
+        }
+
+        menuItem.getIngredientUsages().clear();
+        menuItem.getIngredientUsages().addAll(nextUsages);
+        menuItem.setHasRecipe(!menuItem.getIngredientUsages().isEmpty());
+
+        if (!menuItem.getIngredientUsages().isEmpty() && menuItem.getItemStock() != null) {
+            menuItem.getItemStock().setTotalStock(0);
+            menuItem.getItemStock().setIsActive(false);
+        }
+    }
+
+    private void syncMenuAvailability(MenuItem menuItem) {
+        if (!Boolean.TRUE.equals(menuItem.getIsActive()) || Boolean.TRUE.equals(menuItem.getIsDeleted())) {
+            menuItem.setIsAvailable(false);
+            return;
+        }
+        if (InventoryAvailabilityUtil.hasRecipe(menuItem)) {
+            menuItem.setIsAvailable(InventoryAvailabilityUtil.isMenuItemAvailable(menuItem));
+            return;
+        }
+        if (menuItem.getItemStock() == null) {
+            menuItem.setIsAvailable(false);
+            return;
+        }
+        boolean available = Boolean.TRUE.equals(menuItem.getItemStock().getIsActive())
+                && menuItem.getItemStock().getTotalStock() != null
+                && menuItem.getItemStock().getTotalStock() > 0;
+        menuItem.setIsAvailable(available);
     }
 }

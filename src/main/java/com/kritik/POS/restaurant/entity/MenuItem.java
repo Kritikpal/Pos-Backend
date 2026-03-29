@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -61,13 +62,19 @@ public class MenuItem {
     @JsonIgnore
     private List<SaleItem> saleItems;
 
-    @OneToOne(mappedBy = "menuItem",cascade = CascadeType.ALL,orphanRemoval = true)
+    @OneToOne(mappedBy = "menuItem", cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(nullable = false)
     private ItemStock itemStock;
 
     @OneToOne
     @JoinColumn
     private ProductFile productImage;
+
+    @Column(name = "has_recipi")
+    private Boolean hasRecipe = false;
+
+    @OneToMany(mappedBy = "menuItem", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    private List<MenuItemIngredient> ingredientUsages = new ArrayList<>();
 
     @PrePersist
     public void prePersist() {

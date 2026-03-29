@@ -17,6 +17,10 @@ public class ItemStock {
     @JoinColumn(nullable = false)
     private MenuItem menuItem;
 
+    @ManyToOne
+    @JoinColumn(name = "supplier_id")
+    private Supplier supplier;
+
     @Column(name = "restaurant_id")
     private Long restaurantId;
 
@@ -24,10 +28,19 @@ public class ItemStock {
     private Integer totalStock;
 
     @Column(nullable = false)
+    private Integer reorderLevel = 0;
+
+    @Column(nullable = false, length = 30)
+    private String unitOfMeasure = "unit";
+
+    @Column(nullable = false)
     private Boolean isActive = true;
 
     @Column(nullable = false)
     private Boolean isDeleted = false;
+
+    @Column(name = "last_restocked_at")
+    private LocalDateTime lastRestockedAt;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

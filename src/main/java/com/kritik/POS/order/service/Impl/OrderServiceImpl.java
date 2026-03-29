@@ -1,8 +1,10 @@
 package com.kritik.POS.order.service.Impl;
 
 import com.kritik.POS.events.OrderCompletedEvent;
+import com.kritik.POS.inventory.service.InventoryService;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.exception.errors.OrderException;
+import com.kritik.POS.exception.errors.StockException;
 import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.entity.OrderTax;
 import com.kritik.POS.order.entity.SaleItem;
@@ -13,13 +15,14 @@ import com.kritik.POS.order.model.response.PaymentProcessingResponse;
 import com.kritik.POS.order.repository.OrderRepository;
 import com.kritik.POS.order.service.OrderService;
 import com.kritik.POS.order.util.OrderUtil;
-import com.kritik.POS.restaurant.entity.ItemStock;
+import com.kritik.POS.restaurant.entity.IngredientStock;
 import com.kritik.POS.restaurant.entity.MenuItem;
+import com.kritik.POS.restaurant.entity.MenuItemIngredient;
 import com.kritik.POS.restaurant.models.request.StockRequest;
+import com.kritik.POS.restaurant.repository.IngredientStockRepository;
 import com.kritik.POS.restaurant.repository.MenuItemRepository;
-import com.kritik.POS.restaurant.repository.StockRepository;
-import com.kritik.POS.restaurant.service.StockService;
 import com.kritik.POS.restaurant.specification.MenuItemSpecification;
+import com.kritik.POS.restaurant.util.InventoryAvailabilityUtil;
 import com.kritik.POS.restaurant.util.RestaurantUtil;
 import com.kritik.POS.security.service.TenantAccessService;
 import com.kritik.POS.tax.entity.TaxRate;
@@ -34,7 +37,9 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -42,8 +47,8 @@ import java.util.UUID;
 public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final MenuItemRepository menuItemRepository;
-    private final StockRepository stockRepository;
-    private final StockService stockService;
+    private final IngredientStockRepository ingredientStockRepository;
+    private final InventoryService inventoryService;
     private final TaxService taxService;
     private final ApplicationEventPublisher eventPublisher;
     private final TenantAccessService tenantAccessService;
@@ -54,6 +59,7 @@ public class OrderServiceImpl implements OrderService {
         Order order = new Order();
         List<SaleItem> saleItemList = new ArrayList<>();
         List<StockRequest> stockRequestList = new ArrayList<>();
+        Map<String, Double> ingredientRequirements = new HashMap<>();
         Long orderRestaurantId = null;
 
         for (InitiateOrderRequest.OrderItemRequest orderItemRequest : initiateOrderRequest.getOrderItems()) {
@@ -69,11 +75,22 @@ public class OrderServiceImpl implements OrderService {
             saleItem.setSaleItemPrice(RestaurantUtil.getMenuItemPrice(menuItem.getItemPrice()));
             saleItem.setMenuItem(menuItem);
             saleItem.setRestaurantId(menuItem.getRestaurantId());
-            stockRequestList.add(new StockRequest(menuItem.getItemStock().getSku(), saleItem.getAmount()));
+            if (InventoryAvailabilityUtil.hasRecipe(menuItem)) {
+                for (MenuItemIngredient ingredientUsage : menuItem.getIngredientUsages()) {
+                    ingredientRequirements.merge(
+                            ingredientUsage.getIngredientStock().getSku(),
+                            ingredientUsage.getQuantityRequired() * saleItem.getAmount(),
+                            Double::sum
+                    );
+                }
+            } else if (menuItem.getItemStock() != null) {
+                stockRequestList.add(new StockRequest(menuItem.getItemStock().getSku(), saleItem.getAmount()));
+            }
             saleItem.setOrder(order);
             saleItemList.add(saleItem);
         }
-        stockService.checkStockAvailable(stockRequestList);
+        inventoryService.checkStockAvailable(stockRequestList);
+        checkIngredientStockAvailable(ingredientRequirements);
         order.setOrderItemList(saleItemList);
         order.setRestaurantId(orderRestaurantId);
 
@@ -131,23 +148,12 @@ public class OrderServiceImpl implements OrderService {
     @Override
     public PaymentProcessingResponse completePayment(String orderId, PaymentType paymentType) {
         Order order = getAccessibleOrder(orderId);
+        if (!order.getPaymentStatus().equals(PaymentStatus.PAYMENT_INITIATED)) {
+            throw new OrderException("Payment cannot be completed in the current state");
+        }
         order.setPaymentStatus(PaymentStatus.PAYMENT_SUCCESSFUL);
         order.setPaymentType(paymentType);
         Order savedOrder = orderRepository.save(order);
-        List<ItemStock> itemStocks = new ArrayList<>();
-        for (SaleItem saleItem : savedOrder.getOrderItemList()) {
-            MenuItem menuItem = saleItem.getMenuItem();
-            if (menuItem != null) {
-                ItemStock itemStock = menuItem.getItemStock();
-                itemStock.setTotalStock(itemStock.getTotalStock() - saleItem.getAmount());
-                if (itemStock.getTotalStock() == 0) {
-                    menuItem.setIsAvailable(false);
-                    menuItemRepository.save(menuItem);
-                }
-                itemStocks.add(itemStock);
-            }
-        }
-        stockRepository.saveAll(itemStocks);
         eventPublisher.publishEvent(new OrderCompletedEvent(savedOrder.getOrderId()));
         return new PaymentProcessingResponse(
                 savedOrder,
@@ -192,5 +198,32 @@ public class OrderServiceImpl implements OrderService {
             tenantAccessService.resolveAccessibleRestaurantId(order.getRestaurantId());
         }
         return order;
+    }
+
+    private void checkIngredientStockAvailable(Map<String, Double> ingredientRequirements) {
+        if (ingredientRequirements.isEmpty()) {
+            return;
+        }
+        List<IngredientStock> ingredients = ingredientStockRepository.findAllBySkuInAndIsDeletedFalse(ingredientRequirements.keySet());
+        Map<String, IngredientStock> ingredientMap = new HashMap<>();
+        for (IngredientStock ingredient : ingredients) {
+            if (!tenantAccessService.isSuperAdmin()) {
+                tenantAccessService.resolveAccessibleRestaurantId(ingredient.getRestaurantId());
+            }
+            ingredientMap.put(ingredient.getSku(), ingredient);
+        }
+
+        for (Map.Entry<String, Double> entry : ingredientRequirements.entrySet()) {
+            IngredientStock ingredient = ingredientMap.get(entry.getKey());
+            if (ingredient == null) {
+                throw new StockException("Ingredient stock not found");
+            }
+            if (!Boolean.TRUE.equals(ingredient.getIsActive())) {
+                throw new StockException(ingredient.getIngredientName() + " stock is inactive.");
+            }
+            if (ingredient.getTotalStock() == null || ingredient.getTotalStock() < entry.getValue()) {
+                throw new StockException(ingredient.getIngredientName() + " is not available in stock only " + ingredient.getTotalStock() + " left.");
+            }
+        }
     }
 }

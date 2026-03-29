@@ -31,7 +31,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
             SELECT DISTINCT o FROM Order o
             LEFT JOIN FETCH o.orderItemList oi
             LEFT JOIN FETCH oi.menuItem
-            LEFT JOIN FETCH o.orderTaxes
             WHERE o.orderId = :orderId
               AND o.isDeleted = false
             """)

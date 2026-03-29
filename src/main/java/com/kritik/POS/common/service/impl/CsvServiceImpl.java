@@ -61,7 +61,7 @@ public class CsvServiceImpl implements CsvService {
                     itemRequests.add(new ItemRequest(
                             null, name, description, itemPrice,
                             category.getCategoryId(), discount,
-                            true, true, false, 100
+                            true, false, false, null
                     ));
                 }
             }

@@ -1,6 +1,7 @@
 package com.kritik.POS.tax.repository;
 
 import com.kritik.POS.tax.entity.TaxRate;
+import com.kritik.POS.tax.projection.ActiveTaxRateProjection;
 import com.kritik.POS.tax.projection.TaxRateSummaryProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +24,18 @@ public interface TaxRateRepository extends JpaRepository<TaxRate, Long> {
             """)
     List<TaxRate> findAllActiveVisible(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
                                        @Param("restaurantIds") Collection<Long> restaurantIds);
+
+    @Query("""
+            select t.taxName as name,
+                   t.taxAmount as taxRate
+            from TaxRate t
+            where t.isActive = true
+              and t.isDeleted = false
+              and (:skipRestaurantFilter = true or t.restaurantId in :restaurantIds)
+            order by t.taxName
+            """)
+    List<ActiveTaxRateProjection> findActiveTaxRateSummaries(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                                             @Param("restaurantIds") Collection<Long> restaurantIds);
 
     @Query("""
             select t.taxId as taxId,

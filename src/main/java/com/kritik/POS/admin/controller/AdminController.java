@@ -15,7 +15,7 @@ import com.kritik.POS.order.entity.enums.PaymentType;
 import com.kritik.POS.order.model.response.LastOrderListItemProjection;
 import com.kritik.POS.order.model.response.PaymentByHour;
 import com.kritik.POS.restaurant.models.response.StockReport;
-import com.kritik.POS.restaurant.service.StockService;
+import com.kritik.POS.inventory.service.InventoryService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -36,11 +36,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminController {
 
     private final AdminPaymentService adminPaymentService;
-    private final StockService stockService;
+    private final InventoryService inventoryService;
 
-    public AdminController(AdminPaymentService adminPaymentService, StockService stockService) {
+    public AdminController(AdminPaymentService adminPaymentService, InventoryService inventoryService) {
         this.adminPaymentService = adminPaymentService;
-        this.stockService = stockService;
+        this.inventoryService = inventoryService;
     }
 
     @GetMapping(AdminRoute.GET_ALL_ORDERS_TODAY)
@@ -77,7 +77,7 @@ public class AdminController {
     public ResponseEntity<ApiResponse<List<StockReport>>> getEndingStocks(
             @RequestParam(name = "limit", defaultValue = "5") @Min(value = 1, message = "limit must be at least 1") @Max(value = 100, message = "limit must be 100 or less") Integer limit
     ) {
-        List<StockReport> last5Payments = stockService.getALlStocks("", limit);
+        List<StockReport> last5Payments = inventoryService.getAllStocks("", limit);
         return ResponseEntity.ok(ApiResponse.SUCCESS(last5Payments));
     }
 

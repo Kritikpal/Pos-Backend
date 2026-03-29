@@ -1,12 +1,10 @@
 package com.kritik.POS.restaurant.models.response;
 
-import com.kritik.POS.restaurant.entity.MenuItem;
-import com.kritik.POS.tax.entity.TaxRate;
-import lombok.Data;
+import com.kritik.POS.restaurant.projection.UserDashboardMenuItemProjection;
+import com.kritik.POS.tax.projection.ActiveTaxRateProjection;
 import lombok.Getter;
 
 import java.util.List;
-
 
 @Getter
 public class UserDashboard {
@@ -15,18 +13,19 @@ public class UserDashboard {
     private final List<DashBoardItem> menuItemList;
     private final List<ActiveTax> taxRates;
 
-    public UserDashboard(List<MenuItem> menuItemList, List<TaxRate> allByIsActiveTrue) {
-        List<DashBoardItem> dashBoardItems = menuItemList.stream().map(DashBoardItem::new).toList();
+    public UserDashboard(List<UserDashboardMenuItemProjection> menuItemList, List<ActiveTaxRateProjection> activeTaxRates) {
+        this.menuItemList = menuItemList.stream().map(DashBoardItem::new).toList();
         this.totalItems = menuItemList.size();
-        this.menuItemList = dashBoardItems;
-        this.taxRates = allByIsActiveTrue.stream().map(taxRate -> new ActiveTax(taxRate.getTaxName(), taxRate.getTaxAmount())).toList();
+        this.taxRates = activeTaxRates.stream().map(ActiveTax::new).toList();
     }
-
 
     private record ActiveTax(String name, Double taxRate) {
+        private ActiveTax(ActiveTaxRateProjection projection) {
+            this(projection.getName(), projection.getTaxRate());
+        }
     }
 
-    @Data
+    @Getter
     private static class DashBoardItem {
         private final Long id;
         private final String itemName;
@@ -37,17 +36,17 @@ public class UserDashboard {
         private final Boolean isTrending;
         private final Integer totalStockAvailable;
 
-        public DashBoardItem(MenuItem menuItem) {
-            this.id = menuItem.getId();
-            this.itemName = menuItem.getItemName();
-            this.description = menuItem.getDescription();
-            this.itemPrice = menuItem.getItemPrice().getPrice();
-            this.isAvailable = menuItem.getIsAvailable();
-            this.isTrending = menuItem.getIsTrending();
-            this.categoryName = menuItem.getCategory().getCategoryName();
-            this.totalStockAvailable = menuItem.getItemStock().getTotalStock();
+        private DashBoardItem(UserDashboardMenuItemProjection projection) {
+            this.id = projection.getId();
+            this.itemName = projection.getItemName();
+            this.categoryName = projection.getCategoryName();
+            this.description = projection.getDescription();
+            this.itemPrice = projection.getItemPrice();
+            this.isAvailable = projection.getIsAvailable();
+            this.isTrending = projection.getIsTrending();
+            this.totalStockAvailable = projection.getTotalStockAvailable() == null
+                    ? null
+                    : projection.getTotalStockAvailable().intValue();
         }
     }
-
-
 }

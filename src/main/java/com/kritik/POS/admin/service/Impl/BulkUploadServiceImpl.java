@@ -59,11 +59,8 @@ public class BulkUploadServiceImpl implements BulkUploadService {
             menuItem = menuItemRepository.findById(itemRequest.itemId()).orElseThrow(() -> new AppException("Invalid Item Id", HttpStatus.BAD_REQUEST));
         }
         Category category = categoryRepository.findById(itemRequest.categoryId()).orElseThrow(() -> new AppException("Invalid Category Id" + itemRequest.categoryId(), HttpStatus.BAD_GATEWAY));
-        MenuItem updated = itemRequest.createMenuItemFromRequest(menuItem,category);
+        MenuItem updated = itemRequest.createMenuItemFromRequest(menuItem, category);
         updated.setRestaurantId(category.getRestaurantId());
-        if (updated.getItemStock() != null) {
-            updated.getItemStock().setRestaurantId(category.getRestaurantId());
-        }
         return updated;
     }
 
