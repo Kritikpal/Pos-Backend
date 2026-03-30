@@ -1,5 +1,6 @@
 package com.kritik.POS.restaurant.models.request;
 
+import com.kritik.POS.inventory.entity.enums.StockReceiptSkuType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
@@ -26,6 +27,8 @@ public record StockReceiptCreateRequest(
     public record ReceiptItemRequest(
             @NotBlank(message = "SKU is required")
             String sku,
+            @NotNull(message = "SKU type is required")
+            StockReceiptSkuType skuType,
             @NotNull(message = "Quantity received is required")
             @Min(value = 1, message = "Quantity received must be at least 1")
             Integer quantityReceived,

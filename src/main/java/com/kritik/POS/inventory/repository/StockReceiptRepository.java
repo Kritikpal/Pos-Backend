@@ -20,6 +20,7 @@ public interface StockReceiptRepository extends JpaRepository<StockReceipt, Long
             "supplier",
             "receiptItems",
             "receiptItems.itemStock",
+            "receiptItems.ingredientStock",
             "receiptItems.itemStock.menuItem",
             "receiptItems.itemStock.menuItem.category"
     })

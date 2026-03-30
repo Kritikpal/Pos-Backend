@@ -20,6 +20,7 @@ public final class InventoryRoute {
     public static final String DELETE_SUPPLIER = "/suppliers/{id}";
 
     public static final String GET_RECEIPTS_PAGE = "/receipts";
+    public static final String GET_RECEIPT_SKUS = "/receipts/skus";
     public static final String GET_RECEIPT = "/receipts/{id}";
     public static final String CREATE_RECEIPT = "/receipts";
 

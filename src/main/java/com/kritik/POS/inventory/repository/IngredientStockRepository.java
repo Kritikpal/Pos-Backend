@@ -1,6 +1,7 @@
 package com.kritik.POS.inventory.repository;
 
 import com.kritik.POS.inventory.entity.IngredientStock;
+import com.kritik.POS.inventory.projection.StockReceiptSkuProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -59,4 +60,19 @@ public interface IngredientStockRepository extends JpaRepository<IngredientStock
 
     @EntityGraph(attributePaths = {"supplier"})
     List<IngredientStock> findAllBySkuInAndIsDeletedFalse(Collection<String> skus);
+
+    @Query("""
+            select i.sku as sku,
+                   i.ingredientName as skuName,
+                   'INGREDIENT' as skuType
+            from IngredientStock i
+            left join i.supplier sup
+            where i.isDeleted = false
+              and (:skipRestaurantFilter = true or i.restaurantId in :restaurantIds)
+              and (:supplierId is null or sup.supplierId = :supplierId)
+            order by lower(i.ingredientName), i.sku
+            """)
+    List<StockReceiptSkuProjection> findReceiptSkuOptions(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                                          @Param("restaurantIds") Collection<Long> restaurantIds,
+                                                          @Param("supplierId") Long supplierId);
 }

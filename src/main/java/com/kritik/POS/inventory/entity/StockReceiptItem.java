@@ -1,6 +1,7 @@
 package com.kritik.POS.inventory.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.kritik.POS.inventory.entity.enums.StockReceiptSkuType;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -8,7 +9,8 @@ import lombok.Data;
 @Entity
 @Table(name = "stock_receipt_item", indexes = {
         @Index(name = "idx_stock_receipt_item_receipt", columnList = "receipt_id"),
-        @Index(name = "idx_stock_receipt_item_sku", columnList = "item_stock_sku")
+        @Index(name = "idx_stock_receipt_item_item_sku", columnList = "item_stock_sku"),
+        @Index(name = "idx_stock_receipt_item_ingredient_sku", columnList = "ingredient_sku")
 })
 public class StockReceiptItem {
 
@@ -22,11 +24,19 @@ public class StockReceiptItem {
     private StockReceipt stockReceipt;
 
     @ManyToOne
-    @JoinColumn(name = "item_stock_sku", nullable = false)
+    @JoinColumn(name = "item_stock_sku")
     private ItemStock itemStock;
 
-    @Column(name = "menu_item_name", nullable = false)
-    private String menuItemName;
+    @ManyToOne
+    @JoinColumn(name = "ingredient_sku")
+    private IngredientStock ingredientStock;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sku_type", nullable = false, length = 30)
+    private StockReceiptSkuType skuType;
+
+    @Column(name = "sku_name", nullable = false)
+    private String skuName;
 
     @Column(nullable = false)
     private Integer quantityReceived;

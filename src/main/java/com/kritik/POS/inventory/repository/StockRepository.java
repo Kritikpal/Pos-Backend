@@ -1,6 +1,7 @@
 package com.kritik.POS.inventory.repository;
 
 import com.kritik.POS.inventory.entity.ItemStock;
+import com.kritik.POS.inventory.projection.StockReceiptSkuProjection;
 import com.kritik.POS.inventory.projection.StockSummaryProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface StockRepository extends JpaRepository<ItemStock, String> {
@@ -74,4 +76,22 @@ public interface StockRepository extends JpaRepository<ItemStock, String> {
                                                     @Param("lowStockOnly") boolean lowStockOnly,
                                                     @Param("search") String search,
                                                     Pageable pageable);
+
+    @Query("""
+            select s.sku as sku,
+                   m.itemName as skuName,
+                   'DIRECT_MENU' as skuType
+            from ItemStock s
+            join s.menuItem m
+            left join s.supplier sup
+            where s.isDeleted = false
+              and m.isDeleted = false
+              and coalesce(m.hasRecipe, false) = false
+              and (:skipRestaurantFilter = true or s.restaurantId in :restaurantIds)
+              and (:supplierId is null or sup.supplierId = :supplierId)
+            order by lower(m.itemName), s.sku
+            """)
+    List<StockReceiptSkuProjection> findReceiptSkuOptions(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                                          @Param("restaurantIds") Collection<Long> restaurantIds,
+                                                          @Param("supplierId") Long supplierId);
 }

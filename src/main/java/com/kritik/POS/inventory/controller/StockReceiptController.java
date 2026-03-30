@@ -2,6 +2,7 @@ package com.kritik.POS.inventory.controller;
 
 import com.kritik.POS.common.model.ApiResponse;
 import com.kritik.POS.common.model.PageResponse;
+import com.kritik.POS.inventory.models.response.StockReceiptSkuOptionDto;
 import com.kritik.POS.inventory.models.response.StockReceiptResponseDto;
 import com.kritik.POS.inventory.route.InventoryRoute;
 import com.kritik.POS.inventory.service.ReceiptService;
@@ -14,6 +15,8 @@ import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequiredArgsConstructor
@@ -33,6 +36,14 @@ public class StockReceiptController {
         return ResponseEntity.ok(ApiResponse.SUCCESS(
                 receiptService.getReceiptPage(chainId, restaurantId, search, page, size)
         ));
+    }
+
+    @Tag(name = SwaggerTags.STOCK_RECEIPT)
+    @GetMapping(InventoryRoute.GET_RECEIPT_SKUS)
+    public ResponseEntity<ApiResponse<List<StockReceiptSkuOptionDto>>> getReceiptSkuOptions(
+            @RequestParam(required = false) Long supplierId
+    ) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(receiptService.getReceiptSkuOptions(supplierId)));
     }
 
     @Tag(name = SwaggerTags.STOCK_RECEIPT)
