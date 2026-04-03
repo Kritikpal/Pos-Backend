@@ -4,6 +4,7 @@ import static com.kritik.POS.order.route.PaymentRoute.CANCEL_PAYMENT;
 import static com.kritik.POS.order.route.PaymentRoute.COMPLETE_PAYMENT;
 import static com.kritik.POS.order.route.PaymentRoute.INITIATE_PAYMENT;
 import static com.kritik.POS.order.route.PaymentRoute.REFUND_PAYMENT;
+import static com.kritik.POS.order.route.PaymentRoute.UPDATE_PAYMENT;
 
 import com.kritik.POS.common.model.ApiResponse;
 import com.kritik.POS.order.entity.enums.PaymentType;
@@ -39,6 +40,15 @@ public class PaymentController {
     ) {
         PaymentProcessingResponse initiateOrderResponse = orderService.initiateOrder(initiateOrderRequest);
         return ResponseEntity.ok(ApiResponse.SUCCESS(initiateOrderResponse, "Order initiated successfully"));
+    }
+
+    @PatchMapping(UPDATE_PAYMENT)
+    public ResponseEntity<ApiResponse<PaymentProcessingResponse>> updatePayment(
+            @PathVariable(name = "id") @NotBlank(message = "order id is required") String orderId,
+            @RequestBody @Valid InitiateOrderRequest initiateOrderRequest
+    ) {
+        PaymentProcessingResponse updatedOrderResponse = orderService.updateOrder(orderId, initiateOrderRequest);
+        return ResponseEntity.ok(ApiResponse.SUCCESS(updatedOrderResponse, "Order updated successfully"));
     }
 
     @GetMapping(CANCEL_PAYMENT)

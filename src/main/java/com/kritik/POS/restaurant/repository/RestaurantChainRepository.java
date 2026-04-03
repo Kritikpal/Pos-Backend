@@ -14,7 +14,11 @@ import java.util.Optional;
 public interface RestaurantChainRepository extends JpaRepository<RestaurantChain, Long> {
     boolean existsByName(String name);
 
+    boolean existsByNameIgnoreCaseAndChainIdNot(String name, Long chainId);
+
     Optional<RestaurantChain> findByName(String name);
+
+    Optional<RestaurantChain> findByChainIdAndIsDeletedFalse(Long chainId);
 
     @Query("""
             select r

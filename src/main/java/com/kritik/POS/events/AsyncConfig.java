@@ -21,4 +21,15 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    @Bean(name = "stockUpdateExecutor")
+    public Executor stockUpdateExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(12);
+        executor.setQueueCapacity(200);
+        executor.setThreadNamePrefix("Stock-");
+        executor.initialize();
+        return executor;
+    }
 }

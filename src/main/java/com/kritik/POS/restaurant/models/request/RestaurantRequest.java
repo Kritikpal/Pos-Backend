@@ -32,5 +32,7 @@ public class RestaurantRequest {
 
     private String restaurantGstNumber;
 
+    private Boolean isActive;
+
 
 }

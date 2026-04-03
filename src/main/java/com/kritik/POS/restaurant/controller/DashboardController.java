@@ -6,6 +6,7 @@ import com.kritik.POS.restaurant.service.RestaurantService;
 import com.kritik.POS.swagger.SwaggerTags;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Min;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -17,14 +18,10 @@ import static com.kritik.POS.restaurant.route.RestaurantRoute.GET_RESTAURANT_DAS
 
 @RestController
 @Validated
+@RequiredArgsConstructor
 public class DashboardController {
 
     private final RestaurantService restaurantService;
-
-    @Autowired
-    public DashboardController(RestaurantService restaurantService) {
-        this.restaurantService = restaurantService;
-    }
 
     @Tag(name = SwaggerTags.DASHBOARD)
     @GetMapping(GET_RESTAURANT_DASHBOARD)

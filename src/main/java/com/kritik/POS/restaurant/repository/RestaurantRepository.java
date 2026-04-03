@@ -17,6 +17,8 @@ import java.util.Optional;
 public interface RestaurantRepository extends JpaRepository<Restaurant, Long>, JpaSpecificationExecutor<Restaurant> {
     boolean existsByCodeAndChain(String code, RestaurantChain chain);
 
+    boolean existsByCodeAndChainAndRestaurantIdNot(String code, RestaurantChain chain, Long restaurantId);
+
     boolean existsByRestaurantIdAndChainIdAndIsDeletedFalse(Long restaurantId, Long chainId);
 
     @Query("SELECT r FROM Restaurant r JOIN FETCH r.chain WHERE r.isDeleted = false")
@@ -58,4 +60,13 @@ public interface RestaurantRepository extends JpaRepository<Restaurant, Long>, J
     List<Long> findActiveRestaurantIdsByChainId(@Param("chainId") Long chainId);
 
     Optional<Restaurant> findByRestaurantIdAndIsDeletedFalse(Long restaurantId);
+
+    @Query("""
+            select r
+            from Restaurant r
+            join fetch r.chain
+            where r.restaurantId = :restaurantId
+              and r.isDeleted = false
+            """)
+    Optional<Restaurant> findDetailByRestaurantId(@Param("restaurantId") Long restaurantId);
 }

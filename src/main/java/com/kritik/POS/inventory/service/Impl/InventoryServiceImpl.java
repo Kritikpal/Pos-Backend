@@ -7,20 +7,20 @@ import com.kritik.POS.inventory.models.request.ItemStockUpsertRequest;
 import com.kritik.POS.inventory.service.InventoryService;
 import com.kritik.POS.inventory.util.InventoryUtil;
 import com.kritik.POS.order.entity.Order;
-import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
+import com.kritik.POS.order.model.response.DirectStockDeductionProjection;
+import com.kritik.POS.order.model.response.IngredientStockDeductionProjection;
 import com.kritik.POS.order.repository.OrderRepository;
+import com.kritik.POS.order.repository.SaleItemRepository;
 import com.kritik.POS.inventory.models.response.StockResponseDto;
-import com.kritik.POS.inventory.entity.IngredientStock;
 import com.kritik.POS.inventory.entity.ItemStock;
 import com.kritik.POS.restaurant.entity.MenuItem;
-import com.kritik.POS.inventory.entity.MenuItemIngredient;
-import com.kritik.POS.restaurant.mapper.RestaurantDtoMapper;
 import com.kritik.POS.restaurant.models.request.StockRequest;
 import com.kritik.POS.restaurant.models.request.StockUpdateRequest;
 import com.kritik.POS.restaurant.models.response.StockReport;
 import com.kritik.POS.restaurant.models.response.StockResponse;
 import com.kritik.POS.inventory.repository.IngredientStockRepository;
+import com.kritik.POS.inventory.repository.MenuItemIngredientRepository;
 import com.kritik.POS.restaurant.repository.MenuItemRepository;
 import com.kritik.POS.inventory.repository.StockRepository;
 import com.kritik.POS.restaurant.specification.MenuItemSpecification;
@@ -36,10 +36,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collection;
 import java.util.List;
-import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.UUID;
 
 @Service
@@ -48,15 +47,12 @@ public class InventoryServiceImpl implements InventoryService {
     private final StockRepository stockRepository;
     private final IngredientStockRepository ingredientStockRepository;
     private final MenuItemRepository menuItemRepository;
+    private final MenuItemIngredientRepository menuItemIngredientRepository;
     private final OrderRepository orderRepository;
+    private final SaleItemRepository saleItemRepository;
     private final TenantAccessService tenantAccessService;
-    private final RestaurantDtoMapper restaurantDtoMapper;
     private final InventoryUtil inventoryUtil;
 
-    @Override
-    public StockReport getStockReport(String sku) {
-        return StockReport.buildStockReport(inventoryUtil.getAccessibleStock(sku));
-    }
 
     @Override
     public void checkStockAvailable(List<StockRequest> stockRequestList) {
@@ -175,56 +171,53 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     @Transactional
     public void applyStockChangesForCompletedOrder(String orderId) {
-        Order order = orderRepository.findByOrderIdWithItems(orderId)
+        Order order = orderRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new AppException("Order not found", HttpStatus.BAD_REQUEST));
         if (order.getPaymentStatus() != PaymentStatus.PAYMENT_SUCCESSFUL) {
             return;
         }
 
-        List<ItemStock> itemStocks = new ArrayList<>();
-        List<IngredientStock> ingredientStocks = new ArrayList<>();
-        List<MenuItem> updatedMenus = new ArrayList<>();
-        Set<String> updatedStockSkus = new HashSet<>();
-        Set<String> updatedIngredientSkus = new HashSet<>();
-        Set<Long> updatedMenuIds = new HashSet<>();
+        LocalDateTime updatedAt = LocalDateTime.now();
+        List<DirectStockDeductionProjection> directStockDeductions = saleItemRepository.findDirectStockDeductionsByOrderId(orderId);
+        List<IngredientStockDeductionProjection> ingredientStockDeductions = saleItemRepository.findIngredientStockDeductionsByOrderId(orderId);
 
-        for (SaleItem saleItem : order.getOrderItemList()) {
-            MenuItem menuItem = saleItem.getMenuItem();
-            if (menuItem == null) {
-                continue;
-            }
-            if (InventoryAvailabilityUtil.hasRecipe(menuItem)) {
-                for (MenuItemIngredient ingredientUsage : menuItem.getIngredientUsages()) {
-                    IngredientStock ingredientStock = ingredientUsage.getIngredientStock();
-                    ingredientStock.setTotalStock(ingredientStock.getTotalStock() - (ingredientUsage.getQuantityRequired() * saleItem.getAmount()));
-                    if (updatedIngredientSkus.add(ingredientStock.getSku())) {
-                        ingredientStocks.add(ingredientStock);
-                    }
-                }
-                InventoryUtil.syncMenuAvailability(menuItem);
-                if (updatedMenuIds.add(menuItem.getId())) {
-                    updatedMenus.add(menuItem);
-                }
-                continue;
-            }
-
-            ItemStock itemStock = menuItem.getItemStock();
-            if (itemStock == null) {
-                throw new StockException(menuItem.getItemName() + " does not have an inventory record.");
-            }
-            itemStock.setTotalStock(itemStock.getTotalStock() - saleItem.getAmount());
-            InventoryUtil.syncMenuAvailability(itemStock);
-            if (updatedStockSkus.add(itemStock.getSku())) {
-                itemStocks.add(itemStock);
-            }
-            if (updatedMenuIds.add(menuItem.getId())) {
-                updatedMenus.add(menuItem);
+        for (DirectStockDeductionProjection deduction : directStockDeductions) {
+            int updatedRows = stockRepository.deductStockQuantity(deduction.getSku(), deduction.getQuantity().intValue(), updatedAt);
+            if (updatedRows == 0) {
+                throw new StockException("Stock not found for sku " + deduction.getSku());
             }
         }
 
-        stockRepository.saveAll(itemStocks);
-        ingredientStockRepository.saveAll(ingredientStocks);
-        menuItemRepository.saveAll(updatedMenus);
+        for (IngredientStockDeductionProjection deduction : ingredientStockDeductions) {
+            int updatedRows = ingredientStockRepository.deductStockQuantity(deduction.getSku(), deduction.getQuantity(), updatedAt);
+            if (updatedRows == 0) {
+                throw new StockException("Ingredient stock not found for sku " + deduction.getSku());
+            }
+        }
+
+        refreshAffectedMenuAvailability(
+                saleItemRepository.findDistinctDirectMenuIdsByOrderId(orderId),
+                ingredientStockDeductions.stream()
+                        .map(IngredientStockDeductionProjection::getSku)
+                        .collect(Collectors.toSet())
+        );
+    }
+
+    private void refreshAffectedMenuAvailability(Collection<Long> directMenuIds, Collection<String> ingredientSkus) {
+        if (directMenuIds != null && !directMenuIds.isEmpty()) {
+            menuItemRepository.markUnavailableByIds(directMenuIds);
+            menuItemRepository.markDirectMenusAvailableByIds(directMenuIds);
+        }
+
+        if (ingredientSkus == null || ingredientSkus.isEmpty()) {
+            return;
+        }
+
+        List<Long> recipeMenuIds = menuItemIngredientRepository.findDistinctMenuIdsByIngredientStockSkuIn(ingredientSkus);
+        if (recipeMenuIds.isEmpty()) {
+            return;
+        }
+        menuItemRepository.refreshRecipeAvailabilityByIds(recipeMenuIds);
     }
 
     @Override

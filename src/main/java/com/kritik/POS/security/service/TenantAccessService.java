@@ -37,6 +37,13 @@ public class TenantAccessService {
         }
     }
 
+    public void assertRestaurantAdminOrAbove() {
+        SecurityUser user = currentUser();
+        if (!user.isSuperAdmin() && !user.isChainAdmin() && !user.isRestaurantAdmin()) {
+            throw new AppException("Only restaurant admin, chain admin or super admin can access this resource", HttpStatus.FORBIDDEN);
+        }
+    }
+
     public Long resolveAccessibleChainId(@Nullable Long requestedChainId) {
         SecurityUser user = currentUser();
         if (user.isSuperAdmin()) {
@@ -61,6 +68,51 @@ public class TenantAccessService {
             }
             validateRestaurantBelongsToChain(requestedRestaurantId, requireChainId(user));
             return requestedRestaurantId;
+        }
+
+        Long restaurantId = requireRestaurantId(user);
+        if (requestedRestaurantId != null && !Objects.equals(requestedRestaurantId, restaurantId)) {
+            throw new AppException("Restaurant access denied", HttpStatus.FORBIDDEN);
+        }
+        return restaurantId;
+    }
+
+    public Long resolveManageableChainId(@Nullable Long requestedChainId) {
+        SecurityUser user = currentUser();
+        if (user.isSuperAdmin()) {
+            if (requestedChainId == null) {
+                throw new AppException("Chain id is required for this operation", HttpStatus.BAD_REQUEST);
+            }
+            return requestedChainId;
+        }
+        if (!user.isChainAdmin()) {
+            throw new AppException("Only chain admin or super admin can update chain", HttpStatus.FORBIDDEN);
+        }
+
+        Long chainId = requireChainId(user);
+        if (requestedChainId != null && !Objects.equals(requestedChainId, chainId)) {
+            throw new AppException("Chain access denied", HttpStatus.FORBIDDEN);
+        }
+        return chainId;
+    }
+
+    public Long resolveManageableRestaurantId(@Nullable Long requestedRestaurantId) {
+        SecurityUser user = currentUser();
+        if (user.isSuperAdmin()) {
+            if (requestedRestaurantId == null) {
+                throw new AppException("Restaurant id is required for this operation", HttpStatus.BAD_REQUEST);
+            }
+            return requestedRestaurantId;
+        }
+        if (user.isChainAdmin()) {
+            if (requestedRestaurantId == null) {
+                throw new AppException("Restaurant id is required for this operation", HttpStatus.BAD_REQUEST);
+            }
+            validateRestaurantBelongsToChain(requestedRestaurantId, requireChainId(user));
+            return requestedRestaurantId;
+        }
+        if (!user.isRestaurantAdmin()) {
+            throw new AppException("Only restaurant admin, chain admin or super admin can update restaurant", HttpStatus.FORBIDDEN);
         }
 
         Long restaurantId = requireRestaurantId(user);

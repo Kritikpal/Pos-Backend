@@ -7,9 +7,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -18,9 +20,6 @@ public interface StockRepository extends JpaRepository<ItemStock, String> {
 
     @EntityGraph(attributePaths = {"menuItem", "menuItem.category", "supplier"})
     Optional<ItemStock> findBySkuAndIsDeletedFalse(String sku);
-
-    @EntityGraph(attributePaths = {"menuItem", "menuItem.category", "supplier"})
-    Optional<ItemStock> findByMenuItemIdAndIsDeletedFalse(Long menuItemId);
 
 
     @EntityGraph(attributePaths = {"menuItem", "menuItem.category", "supplier"})
@@ -80,7 +79,9 @@ public interface StockRepository extends JpaRepository<ItemStock, String> {
     @Query("""
             select s.sku as sku,
                    m.itemName as skuName,
-                   'DIRECT_MENU' as skuType
+                   'DIRECT_MENU' as skuType,
+                    s.totalStock as totalStock,
+                    s.unitOfMeasure as unit
             from ItemStock s
             join s.menuItem m
             left join s.supplier sup
@@ -94,4 +95,16 @@ public interface StockRepository extends JpaRepository<ItemStock, String> {
     List<StockReceiptSkuProjection> findReceiptSkuOptions(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
                                                           @Param("restaurantIds") Collection<Long> restaurantIds,
                                                           @Param("supplierId") Long supplierId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update ItemStock s
+            set s.totalStock = s.totalStock - :quantity,
+                s.updatedAt = :updatedAt
+            where s.sku = :sku
+              and s.isDeleted = false
+            """)
+    int deductStockQuantity(@Param("sku") String sku,
+                            @Param("quantity") Integer quantity,
+                            @Param("updatedAt") LocalDateTime updatedAt);
 }

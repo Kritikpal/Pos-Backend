@@ -12,7 +12,6 @@ import com.kritik.POS.restaurant.models.response.StockResponse;
 import java.util.List;
 
 public interface InventoryService {
-    StockReport getStockReport(String sku);
 
     void checkStockAvailable(List<StockRequest> stockRequestList);
 

@@ -2,6 +2,9 @@ package com.kritik.POS.restaurant.controller;
 
 import com.kritik.POS.common.model.ApiResponse;
 import com.kritik.POS.exception.errors.AppException;
+import com.kritik.POS.restaurant.dto.RestaurantChainResponseDto;
+import com.kritik.POS.restaurant.dto.RestaurantDetailResponseDto;
+import com.kritik.POS.restaurant.models.request.RestaurantChainRequest;
 import com.kritik.POS.restaurant.models.request.RestaurantRequest;
 import com.kritik.POS.restaurant.models.request.RestaurantSetupRequest;
 import com.kritik.POS.restaurant.models.response.RestaurantChainInfo;
@@ -24,6 +27,7 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -66,6 +70,21 @@ public class SuperAdminController {
         ));
     }
 
+    @Tag(name = SwaggerTags.CHAIN)
+    @GetMapping(SuperAdminRoute.GET_CHAIN)
+    public ResponseEntity<ApiResponse<RestaurantChainResponseDto>> getChain(@PathVariable Long chainId) throws AppException {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(superAdminService.getChain(chainId)));
+    }
+
+    @Tag(name = SwaggerTags.CHAIN)
+    @PutMapping(SuperAdminRoute.UPDATE_CHAIN)
+    public ResponseEntity<ApiResponse<RestaurantChainResponseDto>> updateChain(
+            @PathVariable Long chainId,
+            @RequestBody @Valid RestaurantChainRequest request
+    ) throws AppException {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(superAdminService.updateChain(chainId, request), "Chain updated"));
+    }
+
     @Tag(name = SwaggerTags.RESTAURANT)
     @PostMapping(SuperAdminRoute.CREATE_RESTAURANT)
     public ResponseEntity<ApiResponse<RestaurantSetupResponse>> createRestaurant(
@@ -92,6 +111,24 @@ public class SuperAdminController {
                         superAdminService.getAllRestaurants(chainId, restaurantId, isActive, search, PageRequest.of(page, size))
                 )
         );
+    }
+
+    @Tag(name = SwaggerTags.RESTAURANT)
+    @GetMapping(SuperAdminRoute.GET_RESTAURANT)
+    public ResponseEntity<ApiResponse<RestaurantDetailResponseDto>> getRestaurant(@PathVariable Long restaurantId) throws AppException {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(superAdminService.getRestaurant(restaurantId)));
+    }
+
+    @Tag(name = SwaggerTags.RESTAURANT)
+    @PutMapping(SuperAdminRoute.UPDATE_RESTAURANT)
+    public ResponseEntity<ApiResponse<RestaurantDetailResponseDto>> updateRestaurant(
+            @PathVariable Long restaurantId,
+            @RequestBody @Valid RestaurantRequest request
+    ) throws AppException {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                superAdminService.updateRestaurant(restaurantId, request),
+                "Restaurant updated"
+        ));
     }
 
     @Tag(name = SwaggerTags.ADMIN)

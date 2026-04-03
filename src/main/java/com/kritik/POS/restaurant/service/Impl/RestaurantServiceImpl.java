@@ -91,23 +91,6 @@ public class RestaurantServiceImpl implements RestaurantService {
         return new UserDashboard(menuItems.getContent(), taxes);
     }
 
-    @Override
-    public List<MenuResponse> getMenuItems() throws AppException {
-        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
-        Specification<MenuItem> specification = Specification.where(MenuItemSpecification.notDeleted());
-        if (!tenantAccessService.isSuperAdmin()) {
-            if (accessibleRestaurantIds.isEmpty()) {
-                return List.of();
-            }
-            specification = specification.and(MenuItemSpecification.belongsToRestaurants(accessibleRestaurantIds));
-        }
-        return menuItemRepository.findAll(
-                        specification,
-                        Sort.by(Sort.Direction.DESC, "isTrending", "updatedAt", "createdAt")
-                ).stream()
-                .map(MenuResponse::buildResponseFromMenu)
-                .toList();
-    }
 
     @Override
     public PageResponse<MenuItemResponseDto> getMenuItemPage(Long chainId, Long restaurantId, Boolean isActive, String search, Integer pageNumber, Integer pageSize) {

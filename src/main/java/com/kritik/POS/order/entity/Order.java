@@ -41,7 +41,7 @@ public class Order {
     @OneToMany(mappedBy = "order",fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderTax> orderTaxes;
 
-    @Column(updatable = false, nullable = false)
+    @Column(nullable = false)
     private Double totalPrice;
 
     @Column(nullable = false, updatable = false, unique = true)

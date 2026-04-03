@@ -8,6 +8,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -135,4 +136,55 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                                                           @Param("isActive") Boolean isActive,
                                                           @Param("search") String search,
                                                           Pageable pageable);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update MenuItem m
+            set m.isAvailable = false
+            where m.id in :menuIds
+            """)
+    int markUnavailableByIds(@Param("menuIds") Collection<Long> menuIds);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update MenuItem m
+            set m.isAvailable = true
+            where m.id in :menuIds
+              and m.isActive = true
+              and m.isDeleted = false
+              and m.itemStock is not null
+              and m.itemStock.isActive = true
+              and m.itemStock.totalStock > 0
+            """)
+    int markDirectMenusAvailableByIds(@Param("menuIds") Collection<Long> menuIds);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query(value = """
+            update menu_item m
+            set is_available = case
+                when m.is_active = false or m.is_deleted = true then false
+                when not exists (
+                    select 1
+                    from menu_item_ingredient mi
+                    where mi.menu_item_id = m.id
+                ) then false
+                when exists (
+                    select 1
+                    from menu_item_ingredient mi
+                    join ingredient_stock i on i.sku = mi.ingredient_sku
+                    where mi.menu_item_id = m.id
+                      and (
+                          i.is_active = false
+                          or i.is_deleted = true
+                          or i.total_stock is null
+                          or mi.quantity_required is null
+                          or mi.quantity_required <= 0
+                          or floor(i.total_stock / mi.quantity_required) <= 0
+                      )
+                ) then false
+                else true
+            end
+            where m.id in (:menuIds)
+            """, nativeQuery = true)
+    int refreshRecipeAvailabilityByIds(@Param("menuIds") Collection<Long> menuIds);
 }

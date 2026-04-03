@@ -6,9 +6,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -46,17 +48,7 @@ public interface IngredientStockRepository extends JpaRepository<IngredientStock
                                                  @Param("search") String search,
                                                  Pageable pageable);
 
-    @EntityGraph(attributePaths = {"supplier"})
-    @Query("""
-            select i
-            from IngredientStock i
-            where i.isDeleted = false
-              and (:skipRestaurantFilter = true or i.restaurantId in :restaurantIds)
-            order by i.totalStock asc, i.ingredientName asc
-            """)
-    Page<IngredientStock> findVisibleIngredients(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
-                                                 @Param("restaurantIds") Collection<Long> restaurantIds,
-                                                 Pageable pageable);
+
 
     @EntityGraph(attributePaths = {"supplier"})
     List<IngredientStock> findAllBySkuInAndIsDeletedFalse(Collection<String> skus);
@@ -64,6 +56,8 @@ public interface IngredientStockRepository extends JpaRepository<IngredientStock
     @Query("""
             select i.sku as sku,
                    i.ingredientName as skuName,
+                   i.totalStock as totalStock,
+                   i.unitOfMeasure as unit,
                    'INGREDIENT' as skuType
             from IngredientStock i
             left join i.supplier sup
@@ -75,4 +69,16 @@ public interface IngredientStockRepository extends JpaRepository<IngredientStock
     List<StockReceiptSkuProjection> findReceiptSkuOptions(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
                                                           @Param("restaurantIds") Collection<Long> restaurantIds,
                                                           @Param("supplierId") Long supplierId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update IngredientStock i
+            set i.totalStock = i.totalStock - :quantity,
+                i.updatedAt = :updatedAt
+            where i.sku = :sku
+              and i.isDeleted = false
+            """)
+    int deductStockQuantity(@Param("sku") String sku,
+                            @Param("quantity") Double quantity,
+                            @Param("updatedAt") LocalDateTime updatedAt);
 }

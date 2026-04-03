@@ -10,10 +10,14 @@ public class SuperAdminRoute {
     // 🏢 Chain
     public static final String CREATE_CHAIN = BASE + "/chain";
     public static final String GET_ALL_CHAINS = BASE + "/chains";
+    public static final String GET_CHAIN = BASE + "/chains/{chainId}";
+    public static final String UPDATE_CHAIN = BASE + "/chains/{chainId}";
 
     // 🍽️ Restaurant
     public static final String CREATE_RESTAURANT = BASE + "/restaurant";
     public static final String GET_ALL_RESTAURANTS = BASE + "/restaurants";
+    public static final String GET_RESTAURANT = BASE + "/restaurants/{restaurantId}";
+    public static final String UPDATE_RESTAURANT = BASE + "/restaurants/{restaurantId}";
 
     // 👤 Admin
     public static final String CREATE_CHAIN_ADMIN = BASE + "/chain/{chainId}/admin";

@@ -32,12 +32,7 @@ public class StaffController {
 
     private final RestaurantService restaurantService;
 
-    @Tag(name = SwaggerTags.MENU_ITEM)
-    @GetMapping(RestaurantRoute.GET_ALL_ITEMS)
-    public ResponseEntity<ApiResponse<List<MenuResponse>>> allItems() {
-        List<MenuResponse> menuItemList = restaurantService.getMenuItems();
-        return ResponseEntity.ok(ApiResponse.SUCCESS(menuItemList));
-    }
+
 
     @Tag(name = SwaggerTags.MENU_ITEM)
     @GetMapping(RestaurantRoute.GET_MENU_ITEMS_PAGE)

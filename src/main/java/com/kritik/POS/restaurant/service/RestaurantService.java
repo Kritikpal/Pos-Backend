@@ -19,7 +19,6 @@ public interface RestaurantService {
 
     UserDashboard userDashboard(Integer pageNumber, Integer pageSize, String searchString, Long categoryId) throws AppException;
 
-    List<MenuResponse> getMenuItems() throws AppException;
     PageResponse<MenuItemResponseDto> getMenuItemPage(Long chainId, Long restaurantId, Boolean isActive, String search, Integer pageNumber, Integer pageSize) throws AppException;
     MenuResponse getMenuItemById(Long itemId) throws AppException;
     MenuResponse addEditMenuItem(ItemRequest itemRequest, MultipartFile productImage) throws AppException;
