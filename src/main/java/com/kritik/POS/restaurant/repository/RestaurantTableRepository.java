@@ -12,6 +12,8 @@ import java.util.Collection;
 import java.util.List;
 
 public interface RestaurantTableRepository extends JpaRepository<RestaurantTable, Long>, JpaSpecificationExecutor<RestaurantTable> {
+    List<RestaurantTable> findAllByRestaurantIdAndIsDeletedFalse(Long restaurantId);
+
     @Query("""
             select t
             from RestaurantTable t

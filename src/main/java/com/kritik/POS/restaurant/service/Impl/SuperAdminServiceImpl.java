@@ -1,21 +1,40 @@
 package com.kritik.POS.restaurant.service.Impl;
 
 import com.kritik.POS.exception.errors.BadRequestException;
+import com.kritik.POS.inventory.entity.IngredientStock;
+import com.kritik.POS.inventory.entity.StockReceipt;
+import com.kritik.POS.inventory.entity.Supplier;
+import com.kritik.POS.inventory.repository.IngredientStockRepository;
+import com.kritik.POS.inventory.repository.StockReceiptRepository;
+import com.kritik.POS.inventory.repository.SupplierRepository;
+import com.kritik.POS.invoice.repository.InvoiceRepository;
+import com.kritik.POS.order.entity.Order;
+import com.kritik.POS.order.entity.SaleItem;
+import com.kritik.POS.order.repository.OrderRepository;
 import com.kritik.POS.restaurant.dto.RestaurantChainResponseDto;
+import com.kritik.POS.restaurant.dto.RestaurantDataDeletionResponseDto;
 import com.kritik.POS.restaurant.dto.RestaurantDetailResponseDto;
+import com.kritik.POS.restaurant.entity.Category;
+import com.kritik.POS.restaurant.entity.MenuItem;
 import com.kritik.POS.restaurant.entity.Restaurant;
 import com.kritik.POS.restaurant.entity.RestaurantChain;
+import com.kritik.POS.restaurant.entity.RestaurantTable;
 import com.kritik.POS.restaurant.models.request.RestaurantChainRequest;
 import com.kritik.POS.restaurant.models.request.RestaurantRequest;
 import com.kritik.POS.restaurant.models.request.RestaurantSetupRequest;
 import com.kritik.POS.restaurant.models.response.RestaurantChainInfo;
 import com.kritik.POS.restaurant.models.response.RestaurantProjection;
 import com.kritik.POS.restaurant.models.response.RestaurantSetupResponse;
+import com.kritik.POS.restaurant.repository.CategoryRepository;
+import com.kritik.POS.restaurant.repository.MenuItemRepository;
 import com.kritik.POS.restaurant.repository.RestaurantChainRepository;
 import com.kritik.POS.restaurant.repository.RestaurantRepository;
+import com.kritik.POS.restaurant.repository.RestaurantTableRepository;
 import com.kritik.POS.restaurant.service.SuperAdminService;
 import com.kritik.POS.restaurant.util.RestaurantMapper;
 import com.kritik.POS.security.service.TenantAccessService;
+import com.kritik.POS.tax.entity.TaxRate;
+import com.kritik.POS.tax.repository.TaxRateRepository;
 import com.kritik.POS.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -34,6 +53,15 @@ public class SuperAdminServiceImpl implements SuperAdminService {
     private final RestaurantChainRepository chainRepository;
     private final UserService userService;
     private final TenantAccessService tenantAccessService;
+    private final MenuItemRepository menuItemRepository;
+    private final CategoryRepository categoryRepository;
+    private final RestaurantTableRepository restaurantTableRepository;
+    private final IngredientStockRepository ingredientStockRepository;
+    private final SupplierRepository supplierRepository;
+    private final StockReceiptRepository stockReceiptRepository;
+    private final TaxRateRepository taxRateRepository;
+    private final OrderRepository orderRepository;
+    private final InvoiceRepository invoiceRepository;
 
     @Override
     @Transactional
@@ -179,6 +207,46 @@ public class SuperAdminServiceImpl implements SuperAdminService {
     }
 
     @Override
+    @Transactional
+    public RestaurantDataDeletionResponseDto deleteRestaurantOperationalData(Long restaurantId) {
+        Long manageableRestaurantId = tenantAccessService.resolveManageableRestaurantId(restaurantId);
+        Restaurant restaurant = getRestaurantEntity(manageableRestaurantId);
+
+        var menus = menuItemRepository.findAllByRestaurantIdAndIsDeletedFalse(manageableRestaurantId);
+        var categories = categoryRepository.findAllByRestaurantIdAndIsDeletedFalse(manageableRestaurantId);
+        var tables = restaurantTableRepository.findAllByRestaurantIdAndIsDeletedFalse(manageableRestaurantId);
+        var ingredients = ingredientStockRepository.findAllByRestaurantIdAndIsDeletedFalse(manageableRestaurantId);
+        var suppliers = supplierRepository.findAllByRestaurantIdAndIsDeletedFalse(manageableRestaurantId);
+        var receipts = stockReceiptRepository.findAllByRestaurantIdAndIsDeletedFalse(manageableRestaurantId);
+        var taxes = taxRateRepository.findAllByRestaurantIdAndIsDeletedFalse(manageableRestaurantId);
+        var orders = orderRepository.findAllVisibleByRestaurantIdWithDetails(manageableRestaurantId);
+        long deletedInvoiceCount = invoiceRepository.deleteByOrderRestaurantId(manageableRestaurantId);
+
+        softDeleteMenus(menus);
+        softDeleteCategories(categories);
+        softDeleteTables(tables);
+        softDeleteIngredients(ingredients);
+        softDeleteSuppliers(suppliers);
+        softDeleteReceipts(receipts);
+        softDeleteTaxes(taxes);
+        softDeleteOrders(orders);
+
+        return new RestaurantDataDeletionResponseDto(
+                restaurant.getRestaurantId(),
+                restaurant.getName(),
+                menus.size(),
+                categories.size(),
+                tables.size(),
+                ingredients.size(),
+                suppliers.size(),
+                receipts.size(),
+                taxes.size(),
+                orders.size(),
+                (int) deletedInvoiceCount
+        );
+    }
+
+    @Override
     public void createChainAdmin(Long chainId, String email, String phone) {
         tenantAccessService.assertSuperAdmin();
         RestaurantChain chain = chainRepository.findById(chainId)
@@ -260,5 +328,82 @@ public class SuperAdminServiceImpl implements SuperAdminService {
             return request.getCode().trim();
         }
         return fallbackCode;
+    }
+
+    private void softDeleteMenus(java.util.List<MenuItem> menus) {
+        for (MenuItem menuItem : menus) {
+            menuItem.setIsDeleted(true);
+            menuItem.setIsActive(false);
+            menuItem.setIsAvailable(false);
+            menuItem.getIngredientUsages().clear();
+            menuItem.setRecipe(null);
+            menuItem.setHasRecipe(false);
+            if (menuItem.getItemStock() != null) {
+                menuItem.getItemStock().setIsDeleted(true);
+                menuItem.getItemStock().setIsActive(false);
+                menuItem.getItemStock().setTotalStock(0);
+            }
+        }
+        menuItemRepository.saveAll(menus);
+    }
+
+    private void softDeleteCategories(java.util.List<Category> categories) {
+        for (Category category : categories) {
+            category.setIsDeleted(true);
+            category.setIsActive(false);
+        }
+        categoryRepository.saveAll(categories);
+    }
+
+    private void softDeleteTables(java.util.List<RestaurantTable> tables) {
+        for (RestaurantTable table : tables) {
+            table.setIsDeleted(true);
+            table.setIsActive(false);
+        }
+        restaurantTableRepository.saveAll(tables);
+    }
+
+    private void softDeleteIngredients(java.util.List<IngredientStock> ingredients) {
+        for (IngredientStock ingredient : ingredients) {
+            ingredient.setIsDeleted(true);
+            ingredient.setIsActive(false);
+            ingredient.setTotalStock(0.0);
+        }
+        ingredientStockRepository.saveAll(ingredients);
+    }
+
+    private void softDeleteSuppliers(java.util.List<Supplier> suppliers) {
+        for (Supplier supplier : suppliers) {
+            supplier.setIsDeleted(true);
+            supplier.setIsActive(false);
+        }
+        supplierRepository.saveAll(suppliers);
+    }
+
+    private void softDeleteReceipts(java.util.List<StockReceipt> receipts) {
+        for (StockReceipt receipt : receipts) {
+            receipt.setIsDeleted(true);
+        }
+        stockReceiptRepository.saveAll(receipts);
+    }
+
+    private void softDeleteTaxes(java.util.List<TaxRate> taxes) {
+        for (TaxRate tax : taxes) {
+            tax.setDeleted(true);
+            tax.setActive(false);
+        }
+        taxRateRepository.saveAll(taxes);
+    }
+
+    private void softDeleteOrders(java.util.List<Order> orders) {
+        for (Order order : orders) {
+            order.setDeleted(true);
+            order.setActive(false);
+            for (SaleItem saleItem : order.getOrderItemList()) {
+                saleItem.setDeleted(true);
+                saleItem.setActive(false);
+            }
+        }
+        orderRepository.saveAll(orders);
     }
 }

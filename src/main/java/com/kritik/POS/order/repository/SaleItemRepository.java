@@ -33,7 +33,7 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
 
     @Query("""
             select ingredientStock.sku as sku,
-                   sum(ingredientUsage.quantityRequired * si.amount) as quantity
+                   sum((ingredientUsage.quantityRequired * si.amount) / ingredientUsage.recipe.batchSize) as quantity
             from SaleItem si
             join si.order o
             join si.menuItem menuItem
@@ -43,6 +43,7 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
               and o.isDeleted = false
               and si.isDeleted = false
               and coalesce(menuItem.hasRecipe, false) = true
+              and ingredientUsage.recipe.batchSize > 0
             group by ingredientStock.sku
             """)
     List<IngredientStockDeductionProjection> findIngredientStockDeductionsByOrderId(@Param("orderId") String orderId);

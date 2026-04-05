@@ -3,6 +3,7 @@ package com.kritik.POS.restaurant.service.Impl;
 import com.kritik.POS.common.model.PageResponse;
 import com.kritik.POS.common.service.FileUploadService;
 import com.kritik.POS.exception.errors.AppException;
+import com.kritik.POS.inventory.entity.MenuRecipe;
 import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.order.repository.SaleItemRepository;
 import com.kritik.POS.restaurant.dto.CategoryResponseDto;
@@ -254,7 +255,7 @@ public class RestaurantServiceImpl implements RestaurantService {
         MenuItem updatedMenuItem = itemRequest.createMenuItemFromRequest(menuItem, category);
         updatedMenuItem.setRestaurantId(category.getRestaurantId());
         updatedMenuItem.setIsDeleted(false);
-        replaceIngredientRecipe(updatedMenuItem, itemRequest.ingredients(), category.getRestaurantId());
+        replaceIngredientRecipe(updatedMenuItem, itemRequest.recipeBatchSize(), itemRequest.ingredients(), category.getRestaurantId());
         syncMenuAvailability(updatedMenuItem);
         return updatedMenuItem;
     }
@@ -345,8 +346,11 @@ public class RestaurantServiceImpl implements RestaurantService {
         return searchString == null ? null : searchString.trim();
     }
 
-    private void replaceIngredientRecipe(MenuItem menuItem, List<ItemRequest.IngredientUsageRequest> ingredientRequests, Long restaurantId) {
-        if (ingredientRequests == null) {
+    private void replaceIngredientRecipe(MenuItem menuItem,
+                                         Integer recipeBatchSize,
+                                         List<ItemRequest.IngredientUsageRequest> ingredientRequests,
+                                         Long restaurantId) {
+        if (ingredientRequests == null && recipeBatchSize == null) {
             return;
         }
 
@@ -354,10 +358,42 @@ public class RestaurantServiceImpl implements RestaurantService {
             menuItem.setIngredientUsages(new ArrayList<>());
         }
 
+        if (ingredientRequests == null) {
+            if (recipeBatchSize == null) {
+                return;
+            }
+            if (menuItem.getIngredientUsages().isEmpty()) {
+                throw new AppException("Recipe ingredients are required for recipe-based menu items", HttpStatus.BAD_REQUEST);
+            }
+            MenuRecipe recipe = menuItem.getRecipe() == null ? new MenuRecipe() : menuItem.getRecipe();
+            recipe.setMenuItem(menuItem);
+            recipe.setBatchSize(recipeBatchSize);
+            recipe.setActive(true);
+            menuItem.setRecipe(recipe);
+            menuItem.setHasRecipe(true);
+            return;
+        }
+
+        if (ingredientRequests == null || ingredientRequests.isEmpty()) {
+            menuItem.getIngredientUsages().clear();
+            menuItem.setRecipe(null);
+            menuItem.setHasRecipe(false);
+            return;
+        }
+
+        if (recipeBatchSize == null || recipeBatchSize <= 0) {
+            throw new AppException("Recipe batch size is required for recipe-based menu items", HttpStatus.BAD_REQUEST);
+        }
+        MenuRecipe recipe = menuItem.getRecipe() == null ? new MenuRecipe() : menuItem.getRecipe();
+        recipe.setBatchSize(recipeBatchSize);
+
         Map<String, MenuItemIngredient> existingUsages = new LinkedHashMap<>();
         for (MenuItemIngredient existingUsage : menuItem.getIngredientUsages()) {
             existingUsages.put(existingUsage.getIngredientStock().getSku(), existingUsage);
         }
+
+        recipe.setMenuItem(menuItem);
+        recipe.setActive(true);
 
         Set<String> addedSkus = new HashSet<>();
         List<MenuItemIngredient> nextUsages = new ArrayList<>();
@@ -374,6 +410,7 @@ public class RestaurantServiceImpl implements RestaurantService {
 
             MenuItemIngredient ingredientUsage = existingUsages.getOrDefault(ingredientRequest.ingredientSku(), new MenuItemIngredient());
             ingredientUsage.setMenuItem(menuItem);
+            ingredientUsage.setRecipe(recipe);
             ingredientUsage.setIngredientStock(ingredientStock);
             ingredientUsage.setQuantityRequired(ingredientRequest.quantityRequired());
             nextUsages.add(ingredientUsage);
@@ -381,6 +418,9 @@ public class RestaurantServiceImpl implements RestaurantService {
 
         menuItem.getIngredientUsages().clear();
         menuItem.getIngredientUsages().addAll(nextUsages);
+        recipe.getIngredientUsages().clear();
+        recipe.getIngredientUsages().addAll(nextUsages);
+        menuItem.setRecipe(recipe);
         menuItem.setHasRecipe(!menuItem.getIngredientUsages().isEmpty());
 
         if (!menuItem.getIngredientUsages().isEmpty() && menuItem.getItemStock() != null) {

@@ -10,12 +10,14 @@ import com.kritik.POS.user.model.response.LoginResponse;
 import com.kritik.POS.user.repository.RefreshTokenRepository;
 import com.kritik.POS.user.repository.UserRepository;
 import com.kritik.POS.user.service.AuthService;
+
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,13 +36,13 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public LoginResponse login(LoginRequest loginRequest) throws AppException {
         User user = userRepository.findByEmail(loginRequest.email().trim().toLowerCase())
-                .orElseThrow(() -> new AppException("Invalid email or password", HttpStatus.UNAUTHORIZED));
+                .orElseThrow(() -> new AppException("Invalid email", HttpStatus.UNAUTHORIZED));
 
         if (!passwordEncoder.matches(loginRequest.password(), user.getPassword())) {
-            throw new AppException("Invalid email or password", HttpStatus.UNAUTHORIZED);
+            throw new AppException("Invalid password", HttpStatus.UNAUTHORIZED);
         }
 
-        return issueTokens(user);
+        return issueTokens(user,loginRequest.longitude(),loginRequest.latitude());
     }
 
     @Override
@@ -65,7 +67,7 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findById(storedToken.getUserId())
                 .orElseThrow(() -> new AppException("User not found", HttpStatus.UNAUTHORIZED));
 
-        return issueTokens(user);
+        return issueTokens(user,storedToken.getLongitude(),storedToken.getLatitude());
     }
 
     @Override
@@ -86,13 +88,15 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new AppException("User not found", HttpStatus.BAD_REQUEST));
     }
 
-    private LoginResponse issueTokens(User user) {
+    private LoginResponse issueTokens(User user, Double longitude, Double latitude) {
         String tokenId = UUID.randomUUID().toString();
         refreshTokenRepository.save(RefreshToken.builder()
                 .tokenId(tokenId)
                 .userId(user.getUserId())
                 .expiryDate(LocalDateTime.now().plusDays(7))
                 .createdAt(LocalDateTime.now())
+                .longitude(longitude)
+                .latitude(latitude)
                 .revoked(false)
                 .build());
 
@@ -102,6 +106,7 @@ public class AuthServiceImpl implements AuthService {
         String primaryRole = roles.stream().findFirst().orElse("STAFF");
 
         Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", user.getUserId());
         claims.put("role", primaryRole);
         claims.put("roles", roles);
         claims.put("restaurantId", user.getRestaurantId());

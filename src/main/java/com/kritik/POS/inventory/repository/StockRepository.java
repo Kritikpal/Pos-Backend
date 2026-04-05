@@ -103,8 +103,21 @@ public interface StockRepository extends JpaRepository<ItemStock, String> {
                 s.updatedAt = :updatedAt
             where s.sku = :sku
               and s.isDeleted = false
+              and s.totalStock >= :quantity
             """)
-    int deductStockQuantity(@Param("sku") String sku,
-                            @Param("quantity") Integer quantity,
-                            @Param("updatedAt") LocalDateTime updatedAt);
+    int deductStockQuantityIfAvailable(@Param("sku") String sku,
+                                       @Param("quantity") Integer quantity,
+                                       @Param("updatedAt") LocalDateTime updatedAt);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update ItemStock s
+            set s.totalStock = s.totalStock + :quantity,
+                s.updatedAt = :updatedAt
+            where s.sku = :sku
+              and s.isDeleted = false
+            """)
+    int increaseStockQuantity(@Param("sku") String sku,
+                              @Param("quantity") Integer quantity,
+                              @Param("updatedAt") LocalDateTime updatedAt);
 }

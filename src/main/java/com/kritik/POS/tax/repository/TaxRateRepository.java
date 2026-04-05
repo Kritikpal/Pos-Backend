@@ -13,6 +13,7 @@ import java.util.Collection;
 import java.util.List;
 
 public interface TaxRateRepository extends JpaRepository<TaxRate, Long> {
+    List<TaxRate> findAllByRestaurantIdAndIsDeletedFalse(Long restaurantId);
 
     @Query("""
             select t

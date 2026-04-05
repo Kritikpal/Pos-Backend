@@ -12,6 +12,6 @@ public class OrderTax {
     private String taxName;
     private Double taxAmount;
     @ManyToOne
-    @JoinColumn(unique = true,nullable = false,updatable = false)
+    @JoinColumn(nullable = false,updatable = false)
     private Order order;
 }

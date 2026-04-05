@@ -1,6 +1,7 @@
 package com.kritik.POS.restaurant.models.response;
 
 import com.kritik.POS.restaurant.projection.UserDashboardMenuItemProjection;
+import com.kritik.POS.restaurant.util.ProductImageUrlUtil;
 import com.kritik.POS.tax.projection.ActiveTaxRateProjection;
 import lombok.Getter;
 
@@ -28,6 +29,7 @@ public class UserDashboard {
     @Getter
     private static class DashBoardItem {
         private final Long id;
+        private final String productImage;
         private final String itemName;
         private final String categoryName;
         private final String description;
@@ -38,6 +40,7 @@ public class UserDashboard {
 
         private DashBoardItem(UserDashboardMenuItemProjection projection) {
             this.id = projection.getId();
+            this.productImage = ProductImageUrlUtil.toClientUrl(projection.getProductImage());
             this.itemName = projection.getItemName();
             this.categoryName = projection.getCategoryName();
             this.description = projection.getDescription();

@@ -25,6 +25,10 @@ public class RefreshToken {
 
     private boolean revoked = false;
 
+    private Double longitude;
+
+    private Double latitude;
+
     private LocalDateTime expiryDate;
 
     private LocalDateTime createdAt;

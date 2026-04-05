@@ -17,6 +17,7 @@ import java.util.List;
 
 public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSpecificationExecutor<MenuItem> {
     List<MenuItem> findAllByIsActiveOrderByIsTrendingDesc(boolean isActive);
+    List<MenuItem> findAllByRestaurantIdAndIsDeletedFalse(Long restaurantId);
 
     @EntityGraph(attributePaths = {"category", "itemPrice", "itemStock"})
     @Query("""
@@ -39,6 +40,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
     @Query(
             value = """
                     select m.id as id,
+                           pf.url as productImage,
                            m.itemName as itemName,
                            c.categoryName as categoryName,
                            m.description as description,
@@ -50,13 +52,15 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                                    (
                                        select min(
                                            case
-                                               when mi.quantityRequired is null
+                                               when mi.recipe.batchSize is null
+                                                    or mi.recipe.batchSize <= 0
+                                                    or mi.quantityRequired is null
                                                     or mi.quantityRequired <= 0
                                                     or ing.totalStock is null
                                                     or ing.isActive = false
                                                     or ing.isDeleted = true
                                                then 0
-                                               else floor(ing.totalStock / mi.quantityRequired)
+                                               else floor((ing.totalStock / mi.quantityRequired) * mi.recipe.batchSize)
                                            end
                                        )
                                        from MenuItemIngredient mi
@@ -71,6 +75,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                     join m.category c
                     left join m.itemPrice ip
                     left join m.itemStock s
+                    left join m.productImage pf
                     where m.isActive = true
                       and m.isDeleted = false
                       and (:skipRestaurantFilter = true or m.restaurantId in :restaurantIds)
@@ -99,6 +104,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
             select m.id as id,
                    m.restaurantId as restaurantId,
                    s.sku as sku,
+                   pf.url as productImage,
                    m.itemName as itemName,
                    m.description as description,
                    ip.price as price,
@@ -106,11 +112,48 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                    m.isAvailable as isAvailable,
                    m.isActive as isActive,
                    m.isTrending as isTrending,
-                   s.totalStock as totalStock,
-                   s.reorderLevel as reorderLevel,
-                   s.unitOfMeasure as unitOfMeasure,
-                   sup.supplierId as supplierId,
-                   sup.supplierName as supplierName,
+                   coalesce(m.hasRecipe, false) as recipeBased,
+                   recipe.batchSize as batchSize,
+                   case
+                       when coalesce(m.hasRecipe, false) = true then coalesce(
+                           (
+                               select min(
+                                   case
+                                       when mi.recipe.batchSize is null
+                                            or mi.recipe.batchSize <= 0
+                                            or mi.quantityRequired is null
+                                            or mi.quantityRequired <= 0
+                                            or ing.totalStock is null
+                                            or ing.isActive = false
+                                            or ing.isDeleted = true
+                                       then 0
+                                       else floor((ing.totalStock / mi.quantityRequired) * mi.recipe.batchSize)
+                                   end
+                               )
+                               from MenuItemIngredient mi
+                               join mi.ingredientStock ing
+                               where mi.menuItem = m
+                           ),
+                           0
+                       )
+                       else s.totalStock
+                   end as totalStock,
+                   case
+                       when coalesce(m.hasRecipe, false) = true then null
+                       else s.reorderLevel
+                   end as reorderLevel,
+                   case
+                       when coalesce(m.hasRecipe, false) = true then 'serving'
+                       else s.unitOfMeasure
+                   end as unitOfMeasure,
+                   case
+                       when coalesce(m.hasRecipe, false) = true then null
+                       else sup.supplierId
+                   end as supplierId,
+                   case
+                       when coalesce(m.hasRecipe, false) = true then null
+                       else sup.supplierName
+                   end as supplierName,
                    c.categoryId as categoryId,
                    c.categoryName as categoryName,
                    m.createdAt as createdAt,
@@ -119,6 +162,8 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
             join m.category c
             left join m.itemPrice ip
             left join m.itemStock s
+            left join m.productImage pf
+            left join m.recipe recipe
             left join s.supplier sup
             where m.isDeleted = false
               and (:skipRestaurantFilter = true or m.restaurantId in :restaurantIds)
@@ -171,15 +216,18 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                 when exists (
                     select 1
                     from menu_item_ingredient mi
+                    join menu_recipe mr on mr.id = mi.recipe_id
                     join ingredient_stock i on i.sku = mi.ingredient_sku
                     where mi.menu_item_id = m.id
                       and (
-                          i.is_active = false
+                          mr.batch_size is null
+                          or mr.batch_size <= 0
+                          or i.is_active = false
                           or i.is_deleted = true
                           or i.total_stock is null
                           or mi.quantity_required is null
                           or mi.quantity_required <= 0
-                          or floor(i.total_stock / mi.quantity_required) <= 0
+                          or floor((i.total_stock / mi.quantity_required) * mr.batch_size) <= 0
                       )
                 ) then false
                 else true

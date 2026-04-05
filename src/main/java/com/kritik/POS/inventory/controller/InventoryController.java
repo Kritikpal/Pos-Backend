@@ -3,20 +3,17 @@ package com.kritik.POS.inventory.controller;
 import com.kritik.POS.common.model.ApiResponse;
 import com.kritik.POS.common.model.PageResponse;
 import com.kritik.POS.inventory.models.request.ItemStockUpsertRequest;
+import com.kritik.POS.inventory.models.response.MenuItemIngredientDto;
 import com.kritik.POS.inventory.route.InventoryRoute;
 import com.kritik.POS.inventory.service.IngredientService;
 import com.kritik.POS.inventory.service.InventoryService;
-import com.kritik.POS.inventory.models.response.StockReceiptResponseDto;
 import com.kritik.POS.inventory.models.response.StockResponseDto;
 import com.kritik.POS.inventory.models.response.SupplierResponseDto;
-import com.kritik.POS.inventory.service.ReceiptService;
 import com.kritik.POS.inventory.service.SupplierService;
 import com.kritik.POS.restaurant.models.request.IngredientRequest;
-import com.kritik.POS.restaurant.models.request.StockReceiptCreateRequest;
 import com.kritik.POS.restaurant.models.request.StockUpdateRequest;
 import com.kritik.POS.restaurant.models.request.SupplierRequest;
 import com.kritik.POS.restaurant.models.response.IngredientResponse;
-import com.kritik.POS.restaurant.models.response.StockReceiptResponse;
 import com.kritik.POS.restaurant.models.response.StockResponse;
 import com.kritik.POS.restaurant.models.response.SupplierResponse;
 import com.kritik.POS.swagger.SwaggerTags;
@@ -63,6 +60,18 @@ public class InventoryController {
                 inventoryService.getStockPage(chainId, restaurantId, isActive, lowStockOnly, search, page, size)
         ));
     }
+
+    @Tag(name = SwaggerTags.INGREDIENT)
+    @GetMapping(InventoryRoute.MENU_INGREDIENT_MAPPING)
+    public ResponseEntity<ApiResponse<List<MenuItemIngredientDto>>> menuIngredients(
+            @RequestParam(required = false) Long chainId,
+            @RequestParam(required = false) Long restaurantId
+    ) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                inventoryService.getIngredientMenuMapping(chainId, restaurantId)
+        ));
+    }
+
 
     @Tag(name = SwaggerTags.STOCK)
     @GetMapping(InventoryRoute.GET_STOCK)

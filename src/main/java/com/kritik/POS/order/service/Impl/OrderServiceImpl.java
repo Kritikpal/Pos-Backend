@@ -10,7 +10,9 @@ import com.kritik.POS.order.entity.OrderTax;
 import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
+import com.kritik.POS.order.model.request.CompletePaymentRequest;
 import com.kritik.POS.order.model.request.InitiateOrderRequest;
+import com.kritik.POS.order.model.request.RefundPaymentRequest;
 import com.kritik.POS.order.model.response.PaymentProcessingResponse;
 import com.kritik.POS.order.repository.OrderRepository;
 import com.kritik.POS.order.service.OrderService;
@@ -22,6 +24,7 @@ import com.kritik.POS.restaurant.models.request.StockRequest;
 import com.kritik.POS.inventory.repository.IngredientStockRepository;
 import com.kritik.POS.restaurant.util.InventoryAvailabilityUtil;
 import com.kritik.POS.restaurant.util.RestaurantUtil;
+import com.kritik.POS.security.models.SecurityUser;
 import com.kritik.POS.security.service.TenantAccessService;
 import com.kritik.POS.tax.entity.TaxRate;
 import com.kritik.POS.tax.service.TaxService;
@@ -34,6 +37,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,7 +73,7 @@ public class OrderServiceImpl implements OrderService {
     @Override
     @Transactional
     public PaymentProcessingResponse updateOrder(String orderId, InitiateOrderRequest initiateOrderRequest) {
-        Order order = getAccessibleOrderWithItems(orderId);
+        Order order = getAccessibleOrderWithItemsForUpdate(orderId);
         if (!order.getPaymentStatus().equals(PaymentStatus.PAYMENT_INITIATED)) {
             throw new OrderException("Cart can only be updated before payment confirmation", HttpStatus.BAD_REQUEST);
         }
@@ -85,12 +89,14 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
+    @Transactional
     public PaymentProcessingResponse cancelTransaction(String orderId) {
-        Order order = getAccessibleOrder(orderId);
+        Order order = getAccessibleOrderWithItemsForUpdate(orderId);
         if (!order.getPaymentStatus().equals(PaymentStatus.PAYMENT_INITIATED)) {
             throw new OrderException("Cant cancel at this moment");
         }
         order.setPaymentStatus(PaymentStatus.PAYMENT_CANCELED);
+        order.setCancelledAt(LocalDateTime.now());
         Order saveOrder = orderRepository.save(order);
         return new PaymentProcessingResponse(
                 saveOrder,
@@ -101,13 +107,26 @@ public class OrderServiceImpl implements OrderService {
 
     @Transactional
     @Override
-    public PaymentProcessingResponse completePayment(String orderId, PaymentType paymentType) {
-        Order order = getAccessibleOrder(orderId);
+    public PaymentProcessingResponse completePayment(String orderId, CompletePaymentRequest request) {
+        Order order = getAccessibleOrderWithItemsForUpdate(orderId);
+        if (order.getPaymentStatus().equals(PaymentStatus.PAYMENT_SUCCESSFUL)) {
+            return new PaymentProcessingResponse(
+                    order,
+                    "Payment Already Completed",
+                    "This order was already marked as paid. Returning the existing payment result."
+            );
+        }
         if (!order.getPaymentStatus().equals(PaymentStatus.PAYMENT_INITIATED)) {
             throw new OrderException("Payment cannot be completed in the current state");
         }
+        validateCurrentOrderStock(order);
+        inventoryService.deductStockForOrder(order);
+
+        PaymentType paymentType = request == null ? null : request.getPaymentType();
         order.setPaymentStatus(PaymentStatus.PAYMENT_SUCCESSFUL);
-        order.setPaymentType(paymentType);
+        order.setPaymentType(resolvePaymentType(paymentType, order.getPaymentType()));
+        order.setPaymentCompletedAt(LocalDateTime.now());
+        applyPaymentAudit(order, request);
         Order savedOrder = orderRepository.save(order);
         eventPublisher.publishEvent(new OrderCompletedEvent(savedOrder.getOrderId()));
         return new PaymentProcessingResponse(
@@ -119,17 +138,36 @@ public class OrderServiceImpl implements OrderService {
 
     @Transactional
     @Override
-    public PaymentProcessingResponse refundPayment(String orderId) {
-        Order order = getAccessibleOrder(orderId);
-        if (order.getPaymentStatus().equals(PaymentStatus.PAYMENT_SUCCESSFUL)) {
-            if (Duration.between(order.getPaymentInitiatedTime(), LocalDateTime.now()).toHours() > 24) {
-                throw new OrderException("Can't complete the refund");
-            }
-            order.setPaymentStatus(PaymentStatus.PAYMENT_REFUND);
-            Order save = orderRepository.save(order);
-            return new PaymentProcessingResponse(save, "Order Refunded", "Order refunded successfully please update the stock");
+    public PaymentProcessingResponse refundPayment(String orderId, RefundPaymentRequest request) {
+        Order order = getAccessibleOrderWithItemsForUpdate(orderId);
+        if (order.getPaymentStatus().equals(PaymentStatus.PAYMENT_REFUND)) {
+            return new PaymentProcessingResponse(
+                    order,
+                    "Order Already Refunded",
+                    "This order has already been refunded. Returning the current refund state."
+            );
         }
-        throw new OrderException("Payment has not been completed yet");
+        if (!order.getPaymentStatus().equals(PaymentStatus.PAYMENT_SUCCESSFUL)) {
+            throw new OrderException("Payment has not been completed yet");
+        }
+
+        LocalDateTime paymentTime = order.getPaymentCompletedAt() != null
+                ? order.getPaymentCompletedAt()
+                : order.getPaymentInitiatedTime();
+        if (paymentTime != null && Duration.between(paymentTime, LocalDateTime.now()).toHours() > 24) {
+            throw new OrderException("Can't complete the refund");
+        }
+
+        inventoryService.restoreStockForRefund(order);
+        order.setPaymentStatus(PaymentStatus.PAYMENT_REFUND);
+        order.setRefundedAt(LocalDateTime.now());
+        applyRefundAudit(order, request);
+        Order save = orderRepository.save(order);
+        return new PaymentProcessingResponse(
+                save,
+                "Order Refunded",
+                "Order refunded successfully and stock has been restored."
+        );
     }
 
     private void rebuildOrder(Order order, InitiateOrderRequest initiateOrderRequest) {
@@ -152,7 +190,7 @@ public class OrderServiceImpl implements OrderService {
                 for (MenuItemIngredient ingredientUsage : menuItem.getIngredientUsages()) {
                     ingredientRequirements.merge(
                             ingredientUsage.getIngredientStock().getSku(),
-                            ingredientUsage.getQuantityRequired() * saleItem.getAmount(),
+                            InventoryAvailabilityUtil.computeRequiredIngredientQuantity(ingredientUsage, saleItem.getAmount()),
                             Double::sum
                     );
                 }
@@ -165,9 +203,9 @@ public class OrderServiceImpl implements OrderService {
 
         inventoryService.checkStockAvailable(stockRequestList);
         checkIngredientStockAvailable(ingredientRequirements);
-        order.setOrderItemList(saleItemList);
+        replaceOrderItems(order, saleItemList);
         order.setRestaurantId(orderRestaurantId);
-        order.setOrderTaxes(buildOrderTaxes(order, orderRestaurantId));
+        replaceOrderTaxes(order, buildOrderTaxes(order, orderRestaurantId));
 
         Double totalPrice = OrderUtil.getTotalPrice(order);
         if (totalPrice <= 0) {
@@ -213,6 +251,84 @@ public class OrderServiceImpl implements OrderService {
         return requestedPaymentType == null ? fallbackPaymentType : requestedPaymentType;
     }
 
+    private void replaceOrderItems(Order order, List<SaleItem> saleItemList) {
+        List<SaleItem> managedItems = order.getOrderItemList();
+        if (managedItems == null) {
+            managedItems = new ArrayList<>();
+            order.setOrderItemList(managedItems);
+        }
+        managedItems.clear();
+        managedItems.addAll(saleItemList);
+    }
+
+    private void replaceOrderTaxes(Order order, List<OrderTax> orderTaxes) {
+        List<OrderTax> managedTaxes = order.getOrderTaxes();
+        if (managedTaxes == null) {
+            managedTaxes = new ArrayList<>();
+            order.setOrderTaxes(managedTaxes);
+        }
+        managedTaxes.clear();
+        managedTaxes.addAll(orderTaxes);
+    }
+
+    private void validateCurrentOrderStock(Order order) {
+        List<StockRequest> stockRequestList = new ArrayList<>();
+        Map<String, Double> ingredientRequirements = new HashMap<>();
+
+        for (SaleItem saleItem : order.getOrderItemList()) {
+            MenuItem menuItem = inventoryService.getAccessibleMenuItem(saleItem.getMenuItem().getId());
+            if (InventoryAvailabilityUtil.hasRecipe(menuItem)) {
+                for (MenuItemIngredient ingredientUsage : menuItem.getIngredientUsages()) {
+                    ingredientRequirements.merge(
+                            ingredientUsage.getIngredientStock().getSku(),
+                            InventoryAvailabilityUtil.computeRequiredIngredientQuantity(ingredientUsage, saleItem.getAmount()),
+                            Double::sum
+                    );
+                }
+            } else if (menuItem.getItemStock() != null) {
+                stockRequestList.add(new StockRequest(menuItem.getItemStock().getSku(), saleItem.getAmount()));
+            }
+        }
+
+        inventoryService.checkStockAvailable(stockRequestList);
+        checkIngredientStockAvailable(ingredientRequirements);
+    }
+
+    private void applyPaymentAudit(Order order, CompletePaymentRequest request) {
+        SecurityUser currentUser = resolveCurrentUser();
+        order.setOperatorUserId(currentUser != null ? currentUser.getUserId() : null);
+        order.setPaymentReference(trimToNull(request == null ? null : request.getPaymentReference()));
+        order.setPaymentCollectedBy(trimToNull(
+                request != null && request.getPaymentCollectedBy() != null
+                        ? request.getPaymentCollectedBy()
+                        : currentUser != null ? currentUser.getEmail() : null
+        ));
+        order.setPaymentNotes(trimToNull(request == null ? null : request.getPaymentNotes()));
+        order.setExternalTxnId(trimToNull(request == null ? null : request.getExternalTxnId()));
+    }
+
+    private void applyRefundAudit(Order order, RefundPaymentRequest request) {
+        SecurityUser currentUser = resolveCurrentUser();
+        order.setRefundOperatorUserId(currentUser != null ? currentUser.getUserId() : null);
+        order.setRefundReason(trimToNull(request == null ? null : request.getRefundReason()));
+        order.setRefundNotes(trimToNull(request == null ? null : request.getRefundNotes()));
+    }
+
+    private SecurityUser resolveCurrentUser() {
+        try {
+            return tenantAccessService.currentUser();
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 
     private Order getAccessibleOrder(String orderId) {
         Order order = orderRepository.findByOrderId(orderId).orElseThrow(OrderException::new);
@@ -222,6 +338,12 @@ public class OrderServiceImpl implements OrderService {
 
     private Order getAccessibleOrderWithItems(String orderId) {
         Order order = orderRepository.findByOrderIdWithItems(orderId).orElseThrow(OrderException::new);
+        validateAccessibleOrder(order);
+        return order;
+    }
+
+    private Order getAccessibleOrderWithItemsForUpdate(String orderId) {
+        Order order = orderRepository.findByOrderIdWithItemsForUpdate(orderId).orElseThrow(OrderException::new);
         validateAccessibleOrder(order);
         return order;
     }

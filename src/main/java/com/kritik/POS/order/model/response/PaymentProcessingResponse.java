@@ -3,6 +3,7 @@ package com.kritik.POS.order.model.response;
 import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
+import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
@@ -16,6 +17,17 @@ public class PaymentProcessingResponse {
     private PaymentType paymentType;
     private PaymentStatus paymentStatus;
     private Double totalPrice;
+    private LocalDateTime paymentCompletedAt;
+    private LocalDateTime cancelledAt;
+    private LocalDateTime refundedAt;
+    private String paymentReference;
+    private String paymentCollectedBy;
+    private String paymentNotes;
+    private String externalTxnId;
+    private Long operatorUserId;
+    private Long refundOperatorUserId;
+    private String refundReason;
+    private String refundNotes;
 
     public PaymentProcessingResponse(Order order, String message, String description) {
         this.message = message;
@@ -24,6 +36,17 @@ public class PaymentProcessingResponse {
         this.paymentType = order.getPaymentType();
         this.paymentStatus = order.getPaymentStatus();
         this.totalPrice = order.getTotalPrice();
+        this.paymentCompletedAt = order.getPaymentCompletedAt();
+        this.cancelledAt = order.getCancelledAt();
+        this.refundedAt = order.getRefundedAt();
+        this.paymentReference = order.getPaymentReference();
+        this.paymentCollectedBy = order.getPaymentCollectedBy();
+        this.paymentNotes = order.getPaymentNotes();
+        this.externalTxnId = order.getExternalTxnId();
+        this.operatorUserId = order.getOperatorUserId();
+        this.refundOperatorUserId = order.getRefundOperatorUserId();
+        this.refundReason = order.getRefundReason();
+        this.refundNotes = order.getRefundNotes();
     }
 
 

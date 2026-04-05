@@ -1,6 +1,7 @@
 package com.kritik.POS.restaurant.service;
 
 import com.kritik.POS.restaurant.dto.RestaurantChainResponseDto;
+import com.kritik.POS.restaurant.dto.RestaurantDataDeletionResponseDto;
 import com.kritik.POS.restaurant.dto.RestaurantDetailResponseDto;
 import com.kritik.POS.restaurant.models.request.RestaurantChainRequest;
 import com.kritik.POS.exception.errors.AppException;
@@ -25,6 +26,7 @@ public interface SuperAdminService {
     Page<RestaurantProjection> getAllRestaurants(Long chainId, Long restaurantId, Boolean isActive, String search, Pageable pageable) throws AppException;
     RestaurantDetailResponseDto getRestaurant(Long restaurantId) throws AppException;
     RestaurantDetailResponseDto updateRestaurant(Long restaurantId, RestaurantRequest request) throws AppException;
+    RestaurantDataDeletionResponseDto deleteRestaurantOperationalData(Long restaurantId) throws AppException;
 
     void createChainAdmin(Long chainId, String email, String phone) throws AppException;
     void createRestaurantAdmin(Long restaurantId, String email, String phone) throws AppException;

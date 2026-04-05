@@ -3,6 +3,8 @@ package com.kritik.POS.inventory.route;
 public final class InventoryRoute {
     public static final String BASE = "/api/inventory";
 
+    public static final String MENU_INGREDIENT_MAPPING = "/menuIngredientMapping";
+
     public static final String GET_STOCKS_PAGE = "/stocks";
     public static final String GET_STOCK = "/stocks/{sku}";
     public static final String SAVE_STOCK = "/stocks";

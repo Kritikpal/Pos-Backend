@@ -1,6 +1,7 @@
 package com.kritik.POS.common.service.impl;
 
 import com.kritik.POS.common.repository.FileRepository;
+import com.kritik.POS.common.route.FileRoute;
 import com.kritik.POS.common.service.FileUploadService;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.restaurant.entity.ProductFile;
@@ -63,7 +64,7 @@ public class FileUploadServiceImpl implements FileUploadService {
             throw new AppException("Failed to store file", HttpStatus.INTERNAL_SERVER_ERROR);
         }
 
-        return saveMetadata(safeFileName, filePath, contentType);
+        return saveMetadata(safeFileName, contentType);
     }
 
     private String generateFileName(String originalFilename) {
@@ -74,10 +75,10 @@ public class FileUploadServiceImpl implements FileUploadService {
         return LocalDateTime.now().toString().replace(":", "-") + "_" + cleanFileName;
     }
 
-    private ProductFile saveMetadata(String fileName, Path filePath, String contentType) {
+    private ProductFile saveMetadata(String fileName, String contentType) {
         ProductFile productFile = new ProductFile();
         productFile.setFileName(fileName);
-        productFile.setUrl(filePath.toString());
+        productFile.setUrl(FileRoute.UPLOADS_BASE_PATH + "/" + fileName);
         productFile.setUploadTime(LocalDateTime.now());
         productFile.setFileType(StringUtils.hasText(contentType) ? contentType : "application/octet-stream");
         return fileRepository.save(productFile);

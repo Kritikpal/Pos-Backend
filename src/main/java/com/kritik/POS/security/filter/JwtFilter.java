@@ -49,10 +49,12 @@ public class JwtFilter extends OncePerRequestFilter {
 
                 String username = claims.getSubject();
                 Set<String> roles = extractRoles(claims);
+                Long userId = claims.get("userId", Long.class);
                 Long restaurantId = claims.get("restaurantId", Long.class);
                 Long chainId = claims.get("chainId", Long.class);
 
                 SecurityUser principal = new SecurityUser(
+                        userId,
                         username,
                         accessToken,
                         tokenId,

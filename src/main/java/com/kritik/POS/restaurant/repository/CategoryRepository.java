@@ -15,6 +15,7 @@ import java.util.Optional;
 public interface CategoryRepository extends JpaRepository<Category, Long>, JpaSpecificationExecutor<Category> {
 
     Optional<Category> findByCategoryName(String name);
+    java.util.List<Category> findAllByRestaurantIdAndIsDeletedFalse(Long restaurantId);
 
     @Query("""
             select c.categoryId as categoryId,

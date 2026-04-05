@@ -15,6 +15,7 @@ import java.util.Optional;
 public interface SupplierRepository extends JpaRepository<Supplier, Long> {
 
     Optional<Supplier> findBySupplierIdAndIsDeletedFalse(Long supplierId);
+    List<Supplier> findAllByRestaurantIdAndIsDeletedFalse(Long restaurantId);
 
     @Query("""
             select s

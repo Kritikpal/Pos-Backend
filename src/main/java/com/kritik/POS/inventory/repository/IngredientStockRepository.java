@@ -53,6 +53,9 @@ public interface IngredientStockRepository extends JpaRepository<IngredientStock
     @EntityGraph(attributePaths = {"supplier"})
     List<IngredientStock> findAllBySkuInAndIsDeletedFalse(Collection<String> skus);
 
+    @EntityGraph(attributePaths = {"supplier"})
+    List<IngredientStock> findAllByRestaurantIdAndIsDeletedFalse(Long restaurantId);
+
     @Query("""
             select i.sku as sku,
                    i.ingredientName as skuName,
@@ -77,8 +80,21 @@ public interface IngredientStockRepository extends JpaRepository<IngredientStock
                 i.updatedAt = :updatedAt
             where i.sku = :sku
               and i.isDeleted = false
+              and i.totalStock >= :quantity
             """)
-    int deductStockQuantity(@Param("sku") String sku,
-                            @Param("quantity") Double quantity,
-                            @Param("updatedAt") LocalDateTime updatedAt);
+    int deductStockQuantityIfAvailable(@Param("sku") String sku,
+                                       @Param("quantity") Double quantity,
+                                       @Param("updatedAt") LocalDateTime updatedAt);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+            update IngredientStock i
+            set i.totalStock = i.totalStock + :quantity,
+                i.updatedAt = :updatedAt
+            where i.sku = :sku
+              and i.isDeleted = false
+            """)
+    int increaseStockQuantity(@Param("sku") String sku,
+                              @Param("quantity") Double quantity,
+                              @Param("updatedAt") LocalDateTime updatedAt);
 }

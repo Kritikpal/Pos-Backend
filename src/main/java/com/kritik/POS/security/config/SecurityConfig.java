@@ -1,5 +1,6 @@
 package com.kritik.POS.security.config;
 
+import com.kritik.POS.common.route.FileRoute;
 import com.kritik.POS.security.entryPoint.JWTEntryPoint;
 import com.kritik.POS.security.filter.JwtFilter;
 import java.util.List;
@@ -39,6 +40,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/auth/**",
                                 "/test/**",
+                                FileRoute.UPLOADS_RESOURCE_PATTERN,
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"

@@ -3,6 +3,7 @@ package com.kritik.POS.restaurant.entity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.kritik.POS.inventory.entity.ItemStock;
 import com.kritik.POS.inventory.entity.MenuItemIngredient;
+import com.kritik.POS.inventory.entity.MenuRecipe;
 import com.kritik.POS.order.entity.SaleItem;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -74,6 +75,9 @@ public class MenuItem {
 
     @Column(name = "has_recipi")
     private Boolean hasRecipe = false;
+
+    @OneToOne(mappedBy = "menuItem", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    private MenuRecipe recipe;
 
     @OneToMany(mappedBy = "menuItem", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<MenuItemIngredient> ingredientUsages = new ArrayList<>();

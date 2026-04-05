@@ -18,6 +18,7 @@ public class SuperAdminRoute {
     public static final String GET_ALL_RESTAURANTS = BASE + "/restaurants";
     public static final String GET_RESTAURANT = BASE + "/restaurants/{restaurantId}";
     public static final String UPDATE_RESTAURANT = BASE + "/restaurants/{restaurantId}";
+    public static final String DELETE_RESTAURANT_DATA = BASE + "/restaurants/{restaurantId}/data";
 
     // 👤 Admin
     public static final String CREATE_CHAIN_ADMIN = BASE + "/chain/{chainId}/admin";

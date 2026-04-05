@@ -15,6 +15,7 @@ import java.util.Optional;
 public interface StockReceiptRepository extends JpaRepository<StockReceipt, Long> {
 
     boolean existsByReceiptNumber(String receiptNumber);
+    java.util.List<StockReceipt> findAllByRestaurantIdAndIsDeletedFalse(Long restaurantId);
 
     @EntityGraph(attributePaths = {
             "supplier",

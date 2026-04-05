@@ -24,8 +24,12 @@ public final class InventoryAvailabilityUtil {
         if (!hasRecipe(menuItem)) {
             return menuItem.getItemStock() == null ? null : menuItem.getItemStock().getTotalStock();
         }
+        Integer batchSize = resolveRecipeBatchSize(menuItem);
+        if (batchSize == null || batchSize <= 0) {
+            return 0;
+        }
 
-        int minimumServings = Integer.MAX_VALUE;
+        double minimumBatchCount = Double.MAX_VALUE;
         for (MenuItemIngredient ingredientUsage : menuItem.getIngredientUsages()) {
             IngredientStock ingredientStock = ingredientUsage.getIngredientStock();
             if (ingredientStock == null
@@ -37,10 +41,13 @@ public final class InventoryAvailabilityUtil {
                 return 0;
             }
 
-            int servingsFromIngredient = (int) Math.floor(ingredientStock.getTotalStock() / ingredientUsage.getQuantityRequired());
-            minimumServings = Math.min(minimumServings, servingsFromIngredient);
+            double batchesFromIngredient = ingredientStock.getTotalStock() / ingredientUsage.getQuantityRequired();
+            minimumBatchCount = Math.min(minimumBatchCount, batchesFromIngredient);
         }
-        return minimumServings == Integer.MAX_VALUE ? 0 : Math.max(minimumServings, 0);
+        if (minimumBatchCount == Double.MAX_VALUE) {
+            return 0;
+        }
+        return Math.max((int) Math.floor(minimumBatchCount * batchSize), 0);
     }
 
     public static boolean isMenuItemAvailable(MenuItem menuItem) {
@@ -77,5 +84,35 @@ public final class InventoryAvailabilityUtil {
                     || ingredientStock.getReorderLevel() == null
                     || ingredientStock.getTotalStock() <= ingredientStock.getReorderLevel();
         });
+    }
+
+    public static double computeRequiredIngredientQuantity(MenuItemIngredient ingredientUsage, Integer servings) {
+        if (ingredientUsage == null || servings == null || servings <= 0) {
+            return 0.0;
+        }
+        Integer batchSize = resolveRecipeBatchSize(ingredientUsage);
+        if (batchSize == null || batchSize <= 0
+                || ingredientUsage.getQuantityRequired() == null
+                || ingredientUsage.getQuantityRequired() <= 0) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return (ingredientUsage.getQuantityRequired() * servings) / batchSize;
+    }
+
+    public static Integer resolveRecipeBatchSize(MenuItemIngredient ingredientUsage) {
+        if (ingredientUsage == null) {
+            return null;
+        }
+        if (ingredientUsage.getRecipe() != null) {
+            return ingredientUsage.getRecipe().getBatchSize();
+        }
+        return ingredientUsage.getMenuItem() == null ? null : resolveRecipeBatchSize(ingredientUsage.getMenuItem());
+    }
+
+    public static Integer resolveRecipeBatchSize(MenuItem menuItem) {
+        if (menuItem == null || menuItem.getRecipe() == null) {
+            return null;
+        }
+        return menuItem.getRecipe().getBatchSize();
     }
 }

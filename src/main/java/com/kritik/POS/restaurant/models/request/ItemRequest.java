@@ -6,6 +6,7 @@ import com.kritik.POS.restaurant.entity.MenuItem;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 
@@ -24,6 +25,8 @@ public record ItemRequest(
         Boolean isActive,
         Boolean isAvailable,
         Boolean isTrending,
+        @Positive(message = "Recipe batch size must be greater than 0")
+        Integer recipeBatchSize,
         List<@Valid IngredientUsageRequest> ingredients
 ) {
 

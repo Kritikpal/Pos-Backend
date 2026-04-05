@@ -27,6 +27,7 @@ import java.time.LocalDateTime;
         @UniqueConstraint(name = "uk_menu_item_ingredient", columnNames = {"menu_item_id", "ingredient_sku"})
 })
 public class MenuItemIngredient {
+
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE)
     private Long id;
@@ -34,6 +35,10 @@ public class MenuItemIngredient {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "menu_item_id", nullable = false)
     private MenuItem menuItem;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "recipe_id")
+    private MenuRecipe recipe;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "ingredient_sku", nullable = false)

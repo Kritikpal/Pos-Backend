@@ -10,6 +10,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 @Data
 public class SecurityUser implements UserDetails {
 
+    private final Long userId;
     private final String email;
     private final String token;
     private final String tokenId;

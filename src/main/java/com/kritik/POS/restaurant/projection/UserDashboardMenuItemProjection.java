@@ -3,6 +3,8 @@ package com.kritik.POS.restaurant.projection;
 public interface UserDashboardMenuItemProjection {
     Long getId();
 
+    String getProductImage();
+
     String getItemName();
 
     String getCategoryName();

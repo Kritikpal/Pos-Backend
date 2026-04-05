@@ -25,4 +25,5 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
             Pageable pageable
     );
     boolean existsByOrder(Order order);
+    long deleteByOrderRestaurantId(Long restaurantId);
 }

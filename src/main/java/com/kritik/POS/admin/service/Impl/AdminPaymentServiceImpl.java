@@ -31,7 +31,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminPaymentServiceImpl implements AdminPaymentService {
     private final OrderRepository orderRepository;
-    private final SaleItemRepository saleItemRepository;
     private final TenantAccessService tenantAccessService;
     private final HourlyPaymentViewRepository hourlyPaymentViewRepository;
     private final DailyKpiRepository dailyKpiRepository;

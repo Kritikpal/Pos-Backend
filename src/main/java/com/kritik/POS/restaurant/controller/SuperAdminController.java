@@ -3,6 +3,7 @@ package com.kritik.POS.restaurant.controller;
 import com.kritik.POS.common.model.ApiResponse;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.restaurant.dto.RestaurantChainResponseDto;
+import com.kritik.POS.restaurant.dto.RestaurantDataDeletionResponseDto;
 import com.kritik.POS.restaurant.dto.RestaurantDetailResponseDto;
 import com.kritik.POS.restaurant.models.request.RestaurantChainRequest;
 import com.kritik.POS.restaurant.models.request.RestaurantRequest;
@@ -24,6 +25,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -128,6 +130,17 @@ public class SuperAdminController {
         return ResponseEntity.ok(ApiResponse.SUCCESS(
                 superAdminService.updateRestaurant(restaurantId, request),
                 "Restaurant updated"
+        ));
+    }
+
+    @Tag(name = SwaggerTags.RESTAURANT)
+    @DeleteMapping(SuperAdminRoute.DELETE_RESTAURANT_DATA)
+    public ResponseEntity<ApiResponse<RestaurantDataDeletionResponseDto>> deleteRestaurantData(
+            @PathVariable Long restaurantId
+    ) throws AppException {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                superAdminService.deleteRestaurantOperationalData(restaurantId),
+                "Restaurant operational data deleted"
         ));
     }
 

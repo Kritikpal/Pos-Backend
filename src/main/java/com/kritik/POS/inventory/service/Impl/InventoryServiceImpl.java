@@ -4,13 +4,12 @@ import com.kritik.POS.common.model.PageResponse;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.exception.errors.StockException;
 import com.kritik.POS.inventory.models.request.ItemStockUpsertRequest;
+import com.kritik.POS.inventory.models.response.MenuItemIngredientDto;
 import com.kritik.POS.inventory.service.InventoryService;
 import com.kritik.POS.inventory.util.InventoryUtil;
 import com.kritik.POS.order.entity.Order;
-import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.model.response.DirectStockDeductionProjection;
 import com.kritik.POS.order.model.response.IngredientStockDeductionProjection;
-import com.kritik.POS.order.repository.OrderRepository;
 import com.kritik.POS.order.repository.SaleItemRepository;
 import com.kritik.POS.inventory.models.response.StockResponseDto;
 import com.kritik.POS.inventory.entity.ItemStock;
@@ -48,7 +47,6 @@ public class InventoryServiceImpl implements InventoryService {
     private final IngredientStockRepository ingredientStockRepository;
     private final MenuItemRepository menuItemRepository;
     private final MenuItemIngredientRepository menuItemIngredientRepository;
-    private final OrderRepository orderRepository;
     private final SaleItemRepository saleItemRepository;
     private final TenantAccessService tenantAccessService;
     private final InventoryUtil inventoryUtil;
@@ -95,6 +93,18 @@ public class InventoryServiceImpl implements InventoryService {
                 )
                 .map(StockResponseDto::toStockDto);
         return PageResponse.from(page);
+    }
+
+    @Override
+    public List<MenuItemIngredientDto> getIngredientMenuMapping(Long chainId, Long restaurantId) {
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(chainId, restaurantId);
+        if (!tenantAccessService.isSuperAdmin() && accessibleRestaurantIds.isEmpty()) {
+            return List.of();
+        }
+        return menuItemIngredientRepository.findAllForRestaurant(
+                        tenantAccessService.isSuperAdmin(),
+                        tenantAccessService.queryRestaurantIds(accessibleRestaurantIds)
+                ).stream().map(MenuItemIngredientDto::fromProjection).toList();
     }
 
     @Override
@@ -170,26 +180,75 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     @Transactional
-    public void applyStockChangesForCompletedOrder(String orderId) {
-        Order order = orderRepository.findByOrderId(orderId)
-                .orElseThrow(() -> new AppException("Order not found", HttpStatus.BAD_REQUEST));
-        if (order.getPaymentStatus() != PaymentStatus.PAYMENT_SUCCESSFUL) {
-            return;
+    public void deductStockForOrder(Order order) {
+        if (order == null || order.getOrderId() == null) {
+            throw new AppException("Order not found", HttpStatus.BAD_REQUEST);
         }
 
+        String orderId = order.getOrderId();
         LocalDateTime updatedAt = LocalDateTime.now();
         List<DirectStockDeductionProjection> directStockDeductions = saleItemRepository.findDirectStockDeductionsByOrderId(orderId);
         List<IngredientStockDeductionProjection> ingredientStockDeductions = saleItemRepository.findIngredientStockDeductionsByOrderId(orderId);
 
         for (DirectStockDeductionProjection deduction : directStockDeductions) {
-            int updatedRows = stockRepository.deductStockQuantity(deduction.getSku(), deduction.getQuantity().intValue(), updatedAt);
+            int updatedRows = stockRepository.deductStockQuantityIfAvailable(
+                    deduction.getSku(),
+                    deduction.getQuantity().intValue(),
+                    updatedAt
+            );
+            if (updatedRows == 0) {
+                throw new StockException("Insufficient stock for sku " + deduction.getSku());
+            }
+        }
+
+        for (IngredientStockDeductionProjection deduction : ingredientStockDeductions) {
+            int updatedRows = ingredientStockRepository.deductStockQuantityIfAvailable(
+                    deduction.getSku(),
+                    deduction.getQuantity(),
+                    updatedAt
+            );
+            if (updatedRows == 0) {
+                throw new StockException("Insufficient ingredient stock for sku " + deduction.getSku());
+            }
+        }
+
+        refreshAffectedMenuAvailability(
+                saleItemRepository.findDistinctDirectMenuIdsByOrderId(orderId),
+                ingredientStockDeductions.stream()
+                        .map(IngredientStockDeductionProjection::getSku)
+                        .collect(Collectors.toSet())
+        );
+    }
+
+    @Override
+    @Transactional
+    public void restoreStockForRefund(Order order) {
+        if (order == null || order.getOrderId() == null) {
+            throw new AppException("Order not found", HttpStatus.BAD_REQUEST);
+        }
+
+        String orderId = order.getOrderId();
+        LocalDateTime updatedAt = LocalDateTime.now();
+        List<DirectStockDeductionProjection> directStockDeductions = saleItemRepository.findDirectStockDeductionsByOrderId(orderId);
+        List<IngredientStockDeductionProjection> ingredientStockDeductions = saleItemRepository.findIngredientStockDeductionsByOrderId(orderId);
+
+        for (DirectStockDeductionProjection deduction : directStockDeductions) {
+            int updatedRows = stockRepository.increaseStockQuantity(
+                    deduction.getSku(),
+                    deduction.getQuantity().intValue(),
+                    updatedAt
+            );
             if (updatedRows == 0) {
                 throw new StockException("Stock not found for sku " + deduction.getSku());
             }
         }
 
         for (IngredientStockDeductionProjection deduction : ingredientStockDeductions) {
-            int updatedRows = ingredientStockRepository.deductStockQuantity(deduction.getSku(), deduction.getQuantity(), updatedAt);
+            int updatedRows = ingredientStockRepository.increaseStockQuantity(
+                    deduction.getSku(),
+                    deduction.getQuantity(),
+                    updatedAt
+            );
             if (updatedRows == 0) {
                 throw new StockException("Ingredient stock not found for sku " + deduction.getSku());
             }

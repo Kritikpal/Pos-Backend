@@ -4,6 +4,7 @@ import com.kritik.POS.restaurant.dto.CategoryResponseDto;
 import com.kritik.POS.restaurant.dto.MenuItemResponseDto;
 import com.kritik.POS.restaurant.projection.CategorySummaryProjection;
 import com.kritik.POS.restaurant.projection.MenuItemSummaryProjection;
+import com.kritik.POS.restaurant.util.ProductImageUrlUtil;
 import com.kritik.POS.tax.dto.TaxRateResponseDto;
 import com.kritik.POS.tax.projection.TaxRateSummaryProjection;
 import org.springframework.stereotype.Component;
@@ -21,6 +22,7 @@ public class RestaurantDtoMapper {
                 projection.getId(),
                 projection.getRestaurantId(),
                 projection.getSku(),
+                ProductImageUrlUtil.toClientUrl(projection.getProductImage()),
                 projection.getItemName(),
                 projection.getDescription(),
                 projection.getPrice(),
@@ -29,6 +31,8 @@ public class RestaurantDtoMapper {
                 projection.getIsAvailable(),
                 projection.getIsActive(),
                 projection.getIsTrending(),
+                projection.getRecipeBased(),
+                projection.getBatchSize(),
                 projection.getTotalStock(),
                 projection.getReorderLevel(),
                 projection.getUnitOfMeasure(),

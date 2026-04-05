@@ -5,6 +5,7 @@ import com.kritik.POS.order.entity.enums.PaymentType;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.util.ArrayList;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -36,10 +37,10 @@ public class Order {
 
 
     @OneToMany(mappedBy = "order",fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<SaleItem> orderItemList;
+    private List<SaleItem> orderItemList = new ArrayList<>();
 
     @OneToMany(mappedBy = "order",fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<OrderTax> orderTaxes;
+    private List<OrderTax> orderTaxes = new ArrayList<>();
 
     @Column(nullable = false)
     private Double totalPrice;
@@ -54,6 +55,39 @@ public class Order {
     @Enumerated
     @Column(nullable = false)
     private PaymentStatus paymentStatus = PaymentStatus.PAYMENT_INITIATED;
+
+    @Column(name = "payment_completed_at")
+    private LocalDateTime paymentCompletedAt;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Column(name = "refunded_at")
+    private LocalDateTime refundedAt;
+
+    @Column(name = "payment_reference")
+    private String paymentReference;
+
+    @Column(name = "payment_collected_by")
+    private String paymentCollectedBy;
+
+    @Column(name = "payment_notes", length = 1000)
+    private String paymentNotes;
+
+    @Column(name = "external_txn_id")
+    private String externalTxnId;
+
+    @Column(name = "operator_user_id")
+    private Long operatorUserId;
+
+    @Column(name = "refund_operator_user_id")
+    private Long refundOperatorUserId;
+
+    @Column(name = "refund_reason", length = 500)
+    private String refundReason;
+
+    @Column(name = "refund_notes", length = 1000)
+    private String refundNotes;
 
     @Column(nullable = false)
     private boolean isActive = true;

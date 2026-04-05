@@ -5,7 +5,9 @@ import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
 import com.kritik.POS.order.model.response.LastOrderListItemProjection;
 import com.kritik.POS.order.model.response.PaymentByHourProjection;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -18,6 +20,16 @@ import java.util.Optional;
 public interface OrderRepository extends JpaRepository<Order, Long> {
 
     Optional<Order> findByOrderId(String orderId);
+
+    @Query("""
+            select distinct o
+            from Order o
+            left join fetch o.orderItemList oi
+            left join fetch o.orderTaxes ot
+            where o.restaurantId = :restaurantId
+              and o.isDeleted = false
+            """)
+    List<Order> findAllVisibleByRestaurantIdWithDetails(@Param("restaurantId") Long restaurantId);
 
     @Query("""
             SELECT o FROM Order o
@@ -35,6 +47,16 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
               AND o.isDeleted = false
             """)
     Optional<Order> findByOrderIdWithItems(@Param("orderId") String orderId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT DISTINCT o FROM Order o
+            LEFT JOIN FETCH o.orderItemList oi
+            LEFT JOIN FETCH oi.menuItem
+            WHERE o.orderId = :orderId
+              AND o.isDeleted = false
+            """)
+    Optional<Order> findByOrderIdWithItemsForUpdate(@Param("orderId") String orderId);
 
     @Query(value = """
             SELECT

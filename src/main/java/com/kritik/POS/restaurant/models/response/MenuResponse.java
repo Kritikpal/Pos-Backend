@@ -5,6 +5,7 @@ import com.kritik.POS.inventory.entity.ItemStock;
 import com.kritik.POS.inventory.entity.MenuItemIngredient;
 import com.kritik.POS.restaurant.entity.MenuItem;
 import com.kritik.POS.restaurant.util.InventoryAvailabilityUtil;
+import com.kritik.POS.restaurant.util.ProductImageUrlUtil;
 import com.kritik.POS.restaurant.util.RestaurantUtil;
 import lombok.Data;
 
@@ -16,6 +17,7 @@ import java.util.List;
 public class MenuResponse {
     private Long id;
     private String sku;
+    private String productImage;
     private String itemName;
     private String description;
     private MenuItemPrice itemPrice;
@@ -30,6 +32,7 @@ public class MenuResponse {
     private Boolean lowStock;
     private SupplierSummary supplier;
     private Boolean recipeBased;
+    private Integer batchSize;
     private List<IngredientUsageSummary> ingredients = new ArrayList<>();
 
     @Data
@@ -68,6 +71,9 @@ public class MenuResponse {
         MenuResponse menuResponse = new MenuResponse();
         menuResponse.setId(menuItem.getId());
         menuResponse.setSku(menuItem.getItemStock() == null ? null : menuItem.getItemStock().getSku());
+        menuResponse.setProductImage(menuItem.getProductImage() == null
+                ? null
+                : ProductImageUrlUtil.toClientUrl(menuItem.getProductImage().getUrl()));
         menuResponse.setItemName(menuItem.getItemName());
         menuResponse.setDescription(menuItem.getDescription());
         menuResponse.setItemPrice(new MenuItemPrice(menuItem.getItemPrice()));
@@ -81,6 +87,7 @@ public class MenuResponse {
                 menuItem.getCategory().getIsActive()));
         menuResponse.setRecipeBased(InventoryAvailabilityUtil.hasRecipe(menuItem));
         if (InventoryAvailabilityUtil.hasRecipe(menuItem)) {
+            menuResponse.setBatchSize(menuItem.getRecipe() == null ? null : menuItem.getRecipe().getBatchSize());
             menuResponse.setItemInStock(InventoryAvailabilityUtil.computeAvailableServings(menuItem));
             menuResponse.setLowStock(InventoryAvailabilityUtil.isRecipeLowStock(menuItem));
             menuResponse.setIngredients(menuItem.getIngredientUsages().stream()
