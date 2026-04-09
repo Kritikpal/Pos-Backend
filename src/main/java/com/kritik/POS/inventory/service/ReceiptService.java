@@ -16,6 +16,5 @@ public interface ReceiptService {
 
     StockReceiptResponse getReceiptById(Long receiptId);
 
-    @Transactional
     StockReceiptResponse createStockReceipt(StockReceiptCreateRequest stockReceiptCreateRequest);
 }

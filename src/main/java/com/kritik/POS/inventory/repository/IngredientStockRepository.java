@@ -1,6 +1,7 @@
 package com.kritik.POS.inventory.repository;
 
-import com.kritik.POS.inventory.entity.IngredientStock;
+import com.kritik.POS.inventory.entity.stock.IngredientStock;
+import com.kritik.POS.inventory.projection.IngredientStockListProjection;
 import com.kritik.POS.inventory.projection.StockReceiptSkuProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -47,6 +48,42 @@ public interface IngredientStockRepository extends JpaRepository<IngredientStock
                                                  @Param("lowStockOnly") boolean lowStockOnly,
                                                  @Param("search") String search,
                                                  Pageable pageable);
+
+    @Query("""
+            select
+            i.sku AS sku,
+            i.ingredientName AS ingredientName,
+            i.totalStock AS totalStock,
+            i.reorderLevel AS reorderLevel,
+            i.unitOfMeasure AS unitOfMeasure,
+            i.isActive AS isActive,
+            i.isDeleted AS isDeleted,
+            i.restaurantId AS restaurantId,
+            i.lastRestockedAt AS lastRestockedAt
+            from IngredientStock i
+            left join i.supplier sup
+            where i.isDeleted = false
+              and (:skipRestaurantFilter = true or i.restaurantId in :restaurantIds)
+              and (:isActive is null or i.isActive = :isActive)
+              and (:lowStockOnly = false or i.totalStock <= i.reorderLevel)
+              and (
+                  coalesce(:search, '') = ''
+                  or lower(i.sku) like lower(concat('%', :search, '%'))
+                  or lower(i.ingredientName) like lower(concat('%', :search, '%'))
+                  or lower(coalesce(i.description, '')) like lower(concat('%', :search, '%'))
+                  or lower(coalesce(sup.supplierName, '')) like lower(concat('%', :search, '%'))
+              )
+            order by
+                case when i.totalStock <= i.reorderLevel then 0 else 1 end asc,
+                i.totalStock asc,
+                i.ingredientName asc
+            """)
+    Page<IngredientStockListProjection> findVisibleIngredientsV2(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                                                 @Param("restaurantIds") Collection<Long> restaurantIds,
+                                                                 @Param("isActive") Boolean isActive,
+                                                                 @Param("lowStockOnly") boolean lowStockOnly,
+                                                                 @Param("search") String search,
+                                                                 Pageable pageable);
 
 
 

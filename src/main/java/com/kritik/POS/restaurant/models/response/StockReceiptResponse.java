@@ -1,6 +1,6 @@
 package com.kritik.POS.restaurant.models.response;
 
-import com.kritik.POS.inventory.entity.StockReceipt;
+import com.kritik.POS.inventory.entity.stockEntry.StockReceipt;
 import lombok.Data;
 
 import java.time.LocalDateTime;

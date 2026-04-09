@@ -11,7 +11,9 @@ import com.kritik.POS.restaurant.models.request.StockUpdateRequest;
 import com.kritik.POS.restaurant.models.response.StockReport;
 import com.kritik.POS.restaurant.models.response.StockResponse;
 
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 
 public interface InventoryService {
 
@@ -32,6 +34,12 @@ public interface InventoryService {
     void deductStockForOrder(Order order);
 
     void restoreStockForRefund(Order order);
+
+    void checkOrderStockAvailability(List<StockRequest> stockRequestList,
+                                     Map<String, Double> ingredientRequirements,
+                                     Map<Long, Double> preparedRequirements);
+
+    void refreshMenuAvailability(Collection<Long> menuIds, Collection<String> ingredientSkus);
 
     MenuItem getAccessibleMenuItem(Long menuItemId);
 }

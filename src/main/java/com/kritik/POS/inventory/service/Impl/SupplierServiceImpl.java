@@ -1,7 +1,7 @@
 package com.kritik.POS.inventory.service.Impl;
 
 import com.kritik.POS.common.model.PageResponse;
-import com.kritik.POS.inventory.entity.Supplier;
+import com.kritik.POS.inventory.entity.stockEntry.Supplier;
 import com.kritik.POS.inventory.models.response.SupplierResponseDto;
 import com.kritik.POS.inventory.repository.SupplierRepository;
 import com.kritik.POS.inventory.service.SupplierService;

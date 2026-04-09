@@ -1,10 +1,11 @@
 package com.kritik.POS.restaurant.models.response;
 
 import com.kritik.POS.restaurant.entity.ItemPrice;
-import com.kritik.POS.inventory.entity.ItemStock;
-import com.kritik.POS.inventory.entity.MenuItemIngredient;
+import com.kritik.POS.inventory.entity.enums.MenuStockStrategy;
+import com.kritik.POS.inventory.entity.stock.ItemStock;
+import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
 import com.kritik.POS.restaurant.entity.MenuItem;
-import com.kritik.POS.restaurant.util.InventoryAvailabilityUtil;
+import com.kritik.POS.inventory.util.InventoryAvailabilityUtil;
 import com.kritik.POS.restaurant.util.ProductImageUrlUtil;
 import com.kritik.POS.restaurant.util.RestaurantUtil;
 import lombok.Data;
@@ -25,6 +26,7 @@ public class MenuResponse {
     private LocalDateTime createdAt;
     private Boolean isActive;
     private Boolean isTrending;
+    private Boolean isPrepared;
     private CategoryResponse category;
     private Integer itemInStock;
     private Integer reorderLevel;
@@ -81,15 +83,18 @@ public class MenuResponse {
         menuResponse.setCreatedAt(menuItem.getCreatedAt());
         menuResponse.setIsActive(menuItem.getIsActive());
         menuResponse.setIsTrending(menuItem.getIsTrending());
+        menuResponse.setIsPrepared(Boolean.TRUE.equals(menuItem.getIsPrepared()));
         menuResponse.setCategory(new CategoryResponse(menuItem.getCategory().getCategoryId(),
                 menuItem.getCategory().getCategoryName(),
                 menuItem.getCategory().getCategoryDescription(),
                 menuItem.getCategory().getIsActive()));
         menuResponse.setRecipeBased(InventoryAvailabilityUtil.hasRecipe(menuItem));
-        if (InventoryAvailabilityUtil.hasRecipe(menuItem)) {
+        MenuStockStrategy stockStrategy = InventoryAvailabilityUtil.resolveStockStrategy(menuItem);
+        if (stockStrategy != MenuStockStrategy.DIRECT) {
             menuResponse.setBatchSize(menuItem.getRecipe() == null ? null : menuItem.getRecipe().getBatchSize());
             menuResponse.setItemInStock(InventoryAvailabilityUtil.computeAvailableServings(menuItem));
-            menuResponse.setLowStock(InventoryAvailabilityUtil.isRecipeLowStock(menuItem));
+            menuResponse.setUnitOfMeasure(InventoryAvailabilityUtil.resolveUnitOfMeasure(menuItem));
+            menuResponse.setLowStock(InventoryAvailabilityUtil.isLowStock(menuItem));
             menuResponse.setIngredients(menuItem.getIngredientUsages().stream()
                     .map(MenuResponse::buildIngredientUsageSummary)
                     .toList());
@@ -99,7 +104,7 @@ public class MenuResponse {
                 menuResponse.setItemInStock(itemStock.getTotalStock());
                 menuResponse.setReorderLevel(itemStock.getReorderLevel());
                 menuResponse.setUnitOfMeasure(itemStock.getUnitOfMeasure());
-                menuResponse.setLowStock(itemStock.getTotalStock() != null && itemStock.getTotalStock() <= itemStock.getReorderLevel());
+                menuResponse.setLowStock(InventoryAvailabilityUtil.isLowStock(menuItem));
                 if (itemStock.getSupplier() != null) {
                     SupplierSummary supplierSummary = new SupplierSummary();
                     supplierSummary.setSupplierId(itemStock.getSupplier().getSupplierId());

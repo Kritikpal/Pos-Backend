@@ -3,12 +3,17 @@ package com.kritik.POS.inventory.controller;
 import com.kritik.POS.common.model.ApiResponse;
 import com.kritik.POS.common.model.PageResponse;
 import com.kritik.POS.inventory.models.request.ItemStockUpsertRequest;
+import com.kritik.POS.inventory.models.request.ProductionEntryCreateRequest;
 import com.kritik.POS.inventory.models.response.MenuItemIngredientDto;
+import com.kritik.POS.inventory.models.response.ProductionEntryResponseDto;
+import com.kritik.POS.inventory.models.response.ProductionEntrySummaryDto;
+import com.kritik.POS.inventory.projection.IngredientStockListProjection;
 import com.kritik.POS.inventory.route.InventoryRoute;
 import com.kritik.POS.inventory.service.IngredientService;
 import com.kritik.POS.inventory.service.InventoryService;
 import com.kritik.POS.inventory.models.response.StockResponseDto;
 import com.kritik.POS.inventory.models.response.SupplierResponseDto;
+import com.kritik.POS.inventory.service.ProductionEntryService;
 import com.kritik.POS.inventory.service.SupplierService;
 import com.kritik.POS.restaurant.models.request.IngredientRequest;
 import com.kritik.POS.restaurant.models.request.StockUpdateRequest;
@@ -44,6 +49,7 @@ public class InventoryController {
     private final InventoryService inventoryService;
     private final SupplierService supplierService;
     private final IngredientService ingredientService;
+    private final ProductionEntryService productionEntryService;
 
     @Tag(name = SwaggerTags.STOCK)
     @GetMapping(InventoryRoute.GET_STOCKS_PAGE)
@@ -113,6 +119,23 @@ public class InventoryController {
     ) {
         return ResponseEntity.ok(ApiResponse.SUCCESS(
                 ingredientService.getIngredientPage(chainId, restaurantId, isActive, lowStockOnly, search, page, size)
+        ));
+    }
+
+
+    @Tag(name = SwaggerTags.INGREDIENT)
+    @GetMapping(InventoryRoute.GET_INGREDIENTS_PAGE_V2)
+    public ResponseEntity<ApiResponse<PageResponse<IngredientStockListProjection>>> ingredientPageV2(
+            @RequestParam(required = false) Long chainId,
+            @RequestParam(required = false) Long restaurantId,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(required = false, defaultValue = "false") Boolean lowStockOnly,
+            @RequestParam(required = false, defaultValue = "") String search,
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "page must be 0 or greater") Integer page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "size must be at least 1") Integer size
+    ) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                ingredientService.getIngredientPageV2(chainId, restaurantId, isActive, lowStockOnly, search, page, size)
         ));
     }
 
@@ -188,6 +211,37 @@ public class InventoryController {
         return ResponseEntity.ok(ApiResponse.SUCCESS(
                 supplierService.deleteSupplier(supplierId),
                 "Supplier deleted successfully"
+        ));
+    }
+
+    @Tag(name = SwaggerTags.PRODUCTION_ENTRY)
+    @GetMapping(InventoryRoute.GET_PRODUCTION_ENTRIES)
+    public ResponseEntity<ApiResponse<PageResponse<ProductionEntrySummaryDto>>> productionEntryPage(
+            @RequestParam(required = false) Long chainId,
+            @RequestParam(required = false) Long restaurantId,
+            @RequestParam(required = false) Long menuItemId,
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "page must be 0 or greater") Integer page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "size must be at least 1") Integer size
+    ) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                productionEntryService.getProductionEntryPage(chainId, restaurantId, menuItemId, page, size)
+        ));
+    }
+
+    @Tag(name = SwaggerTags.PRODUCTION_ENTRY)
+    @GetMapping(InventoryRoute.GET_PRODUCTION_ENTRY)
+    public ResponseEntity<ApiResponse<ProductionEntryResponseDto>> getProductionEntry(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(productionEntryService.getProductionEntry(id)));
+    }
+
+    @Tag(name = SwaggerTags.PRODUCTION_ENTRY)
+    @PostMapping(InventoryRoute.CREATE_PRODUCTION_ENTRY)
+    public ResponseEntity<ApiResponse<ProductionEntryResponseDto>> createProductionEntry(
+            @RequestBody @Valid ProductionEntryCreateRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                productionEntryService.createProductionEntry(request),
+                "Production entry created successfully"
         ));
     }
 

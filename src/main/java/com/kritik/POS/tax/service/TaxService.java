@@ -13,6 +13,8 @@ public interface TaxService {
     boolean deleteTaxRate(Long taxId);
 
     List<TaxRate> getAllTaxRates();
+
     List<TaxRate> getActiveTaxRates();
+
     PageResponse<TaxRateResponseDto> getTaxRatePage(Long chainId, Long restaurantId, Boolean isActive, String search, Integer pageNumber, Integer pageSize);
 }

@@ -61,7 +61,8 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query(value = """
             SELECT
                 CAST(EXTRACT(HOUR FROM o.last_updated_time) AS INTEGER) AS hourOfDay,
-                COUNT(o.id) AS numberOfPayments
+                COUNT(o.id) AS numberOfPayments,
+                COALESCE(SUM(o.total_price), 0) AS totalRevenue
             FROM orders o
             WHERE o.payment_status = :paymentStatus
               AND (:skipRestaurantFilter = true OR o.restaurant_id IN (:restaurantIds))

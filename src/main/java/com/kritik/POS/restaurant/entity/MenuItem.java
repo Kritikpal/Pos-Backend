@@ -1,9 +1,10 @@
 package com.kritik.POS.restaurant.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.kritik.POS.inventory.entity.ItemStock;
-import com.kritik.POS.inventory.entity.MenuItemIngredient;
-import com.kritik.POS.inventory.entity.MenuRecipe;
+import com.kritik.POS.inventory.entity.stock.ItemStock;
+import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
+import com.kritik.POS.inventory.entity.recipi.MenuRecipe;
+import com.kritik.POS.inventory.entity.stock.PreparedItemStock;
 import com.kritik.POS.order.entity.SaleItem;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -61,6 +62,9 @@ public class MenuItem {
     @Column(nullable = false)
     private Boolean isTrending = false;
 
+    @Column
+    private Boolean isPrepared = false;
+
     @OneToMany(mappedBy = "menuItem")
     @JsonIgnore
     private List<SaleItem> saleItems;
@@ -68,6 +72,10 @@ public class MenuItem {
     @OneToOne(mappedBy = "menuItem", cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(nullable = false)
     private ItemStock itemStock;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id", referencedColumnName = "menu_item_id", insertable = false, updatable = false)
+    private PreparedItemStock preparedItemStock;
 
     @OneToOne
     @JoinColumn

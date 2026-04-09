@@ -1,6 +1,6 @@
 package com.kritik.POS.order.repository;
 
-import com.kritik.POS.admin.models.response.MostOrderedMenu;
+import com.kritik.POS.admin.views.projection.MostOrderedMenuProjection;
 import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.model.response.DirectStockDeductionProjection;
@@ -27,6 +27,7 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
               and o.isDeleted = false
               and si.isDeleted = false
               and coalesce(menuItem.hasRecipe, false) = false
+              and coalesce(menuItem.isPrepared, false) = false
             group by itemStock.sku
             """)
     List<DirectStockDeductionProjection> findDirectStockDeductionsByOrderId(@Param("orderId") String orderId);
@@ -43,6 +44,7 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
               and o.isDeleted = false
               and si.isDeleted = false
               and coalesce(menuItem.hasRecipe, false) = true
+              and coalesce(menuItem.isPrepared, false) = false
               and ingredientUsage.recipe.batchSize > 0
             group by ingredientStock.sku
             """)
@@ -57,15 +59,27 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
               and o.isDeleted = false
               and si.isDeleted = false
               and coalesce(menuItem.hasRecipe, false) = false
+              and coalesce(menuItem.isPrepared, false) = false
             """)
     List<Long> findDistinctDirectMenuIdsByOrderId(@Param("orderId") String orderId);
 
     @Query("""
-            SELECT new com.kritik.POS.admin.models.response.MostOrderedMenu(
-                si.saleItemName,
-                SUM(si.amount),
-                SUM(si.amount * si.saleItemPrice)
-            )
+            select distinct menuItem.id
+            from SaleItem si
+            join si.order o
+            join si.menuItem menuItem
+            where o.orderId = :orderId
+              and o.isDeleted = false
+              and si.isDeleted = false
+              and coalesce(menuItem.hasRecipe, false) = true
+              and coalesce(menuItem.isPrepared, false) = true
+            """)
+    List<Long> findDistinctPreparedMenuIdsByOrderId(@Param("orderId") String orderId);
+
+    @Query("""
+            SELECT si.saleItemName as saleItemName,
+                SUM(si.amount) as totalQuantity,
+                SUM(si.amount * si.saleItemPrice) as totalRevenue
             FROM SaleItem si
             JOIN si.order o
             WHERE o.paymentStatus = :paymentStatus
@@ -76,10 +90,10 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
             GROUP BY si.saleItemName
             ORDER BY SUM(si.amount * si.saleItemPrice) DESC
             """)
-    List<MostOrderedMenu> findMostOrderedItemsByPaymentStatusAndDate(@Param("paymentStatus") PaymentStatus paymentStatus,
-                                                                     @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
-                                                                     @Param("restaurantIds") Collection<Long> restaurantIds,
-                                                                     @Param("startDate") LocalDateTime startDate,
-                                                                     @Param("endDate") LocalDateTime endDate,
-                                                                     Pageable pageable);
+    List<MostOrderedMenuProjection> findMostOrderedItemsByPaymentStatusAndDate(@Param("paymentStatus") PaymentStatus paymentStatus,
+                                                                               @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                                                               @Param("restaurantIds") Collection<Long> restaurantIds,
+                                                                               @Param("startDate") LocalDateTime startDate,
+                                                                               @Param("endDate") LocalDateTime endDate,
+                                                                               Pageable pageable);
 }

@@ -1,11 +1,11 @@
 package com.kritik.POS.order.service.Impl;
 
 import com.kritik.POS.events.OrderCompletedEvent;
-import com.kritik.POS.inventory.entity.IngredientStock;
-import com.kritik.POS.inventory.entity.ItemStock;
-import com.kritik.POS.inventory.entity.MenuItemIngredient;
-import com.kritik.POS.inventory.entity.MenuRecipe;
-import com.kritik.POS.inventory.repository.IngredientStockRepository;
+import com.kritik.POS.inventory.entity.stock.IngredientStock;
+import com.kritik.POS.inventory.entity.stock.ItemStock;
+import com.kritik.POS.inventory.entity.stock.PreparedItemStock;
+import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
+import com.kritik.POS.inventory.entity.recipi.MenuRecipe;
 import com.kritik.POS.inventory.service.InventoryService;
 import com.kritik.POS.exception.errors.OrderException;
 import com.kritik.POS.order.entity.Order;
@@ -33,11 +33,13 @@ import org.springframework.http.HttpStatus;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
@@ -49,9 +51,6 @@ class OrderServiceImplTest {
 
     @Mock
     private OrderRepository orderRepository;
-
-    @Mock
-    private IngredientStockRepository ingredientStockRepository;
 
     @Mock
     private InventoryService inventoryService;
@@ -237,20 +236,34 @@ class OrderServiceImplTest {
     @Test
     void initiateOrderUsesRecipeBatchSizeForIngredientValidation() {
         MenuItem recipeMenu = buildRecipeMenuItem(200L, 10L, "Biryani", 180.0, "ING-1", 20.0, 10);
-        IngredientStock ingredientStock = recipeMenu.getIngredientUsages().get(0).getIngredientStock();
-        ingredientStock.setTotalStock(15.0);
 
         when(inventoryService.getAccessibleMenuItem(200L)).thenReturn(recipeMenu);
-        when(ingredientStockRepository.findAllBySkuInAndIsDeletedFalse(argThat(skus -> skus.contains("ING-1"))))
-                .thenReturn(List.of(ingredientStock));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(taxService.getActiveTaxRates()).thenReturn(List.of());
-        when(tenantAccessService.isSuperAdmin()).thenReturn(true);
 
         PaymentProcessingResponse response = orderService.initiateOrder(buildRequest(200L, 5, PaymentType.CARD));
 
         assertThat(response.getTotalPrice()).isEqualTo(900.0);
         verify(orderRepository).save(any(Order.class));
+        verify(inventoryService).checkOrderStockAvailability(any(List.class), argThat(requirements ->
+                requirements.containsKey("ING-1") && Math.abs(requirements.get("ING-1") - 10.0) < 0.0001
+        ), eq(Map.<Long, Double>of()));
+    }
+
+    @Test
+    void initiateOrderUsesPreparedStockInsteadOfIngredientStockForPreparedItems() {
+        MenuItem preparedMenu = buildPreparedMenuItem(300L, 10L, "Paneer Roll", 120.0, "ING-2", 5.0, 5, 8.0);
+
+        when(inventoryService.getAccessibleMenuItem(300L)).thenReturn(preparedMenu);
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taxService.getActiveTaxRates()).thenReturn(List.of());
+
+        PaymentProcessingResponse response = orderService.initiateOrder(buildRequest(300L, 3, PaymentType.CASH));
+
+        assertThat(response.getTotalPrice()).isEqualTo(360.0);
+        verify(inventoryService).checkOrderStockAvailability(eq(List.of()), eq(Map.<String, Double>of()), argThat(requirements ->
+                requirements.containsKey(300L) && Math.abs(requirements.get(300L) - 3.0) < 0.0001
+        ));
     }
 
     private InitiateOrderRequest buildRequest(Long menuItemId, Integer amount, PaymentType paymentType) {
@@ -324,6 +337,28 @@ class OrderServiceImplTest {
         recipe.setIngredientUsages(List.of(ingredientUsage));
         menuItem.setRecipe(recipe);
         menuItem.setIngredientUsages(List.of(ingredientUsage));
+        return menuItem;
+    }
+
+    private MenuItem buildPreparedMenuItem(Long id,
+                                           Long restaurantId,
+                                           String itemName,
+                                           Double price,
+                                           String ingredientSku,
+                                           Double quantityRequired,
+                                           Integer batchSize,
+                                           Double preparedQty) {
+        MenuItem menuItem = buildRecipeMenuItem(id, restaurantId, itemName, price, ingredientSku, quantityRequired, batchSize);
+        menuItem.setIsPrepared(true);
+
+        PreparedItemStock preparedItemStock = new PreparedItemStock();
+        preparedItemStock.setMenuItemId(id);
+        preparedItemStock.setRestaurantId(restaurantId);
+        preparedItemStock.setAvailableQty(preparedQty);
+        preparedItemStock.setReservedQty(0.0);
+        preparedItemStock.setUnitCode("PCS");
+        preparedItemStock.setActive(true);
+        menuItem.setPreparedItemStock(preparedItemStock);
         return menuItem;
     }
 }

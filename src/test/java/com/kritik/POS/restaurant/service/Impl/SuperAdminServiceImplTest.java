@@ -1,9 +1,9 @@
 package com.kritik.POS.restaurant.service.Impl;
 
 import com.kritik.POS.exception.errors.BadRequestException;
-import com.kritik.POS.inventory.entity.IngredientStock;
-import com.kritik.POS.inventory.entity.StockReceipt;
-import com.kritik.POS.inventory.entity.Supplier;
+import com.kritik.POS.inventory.entity.stock.IngredientStock;
+import com.kritik.POS.inventory.entity.stockEntry.StockReceipt;
+import com.kritik.POS.inventory.entity.stockEntry.Supplier;
 import com.kritik.POS.inventory.repository.IngredientStockRepository;
 import com.kritik.POS.inventory.repository.StockReceiptRepository;
 import com.kritik.POS.inventory.repository.SupplierRepository;

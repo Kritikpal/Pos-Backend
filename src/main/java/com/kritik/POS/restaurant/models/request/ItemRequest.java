@@ -25,6 +25,7 @@ public record ItemRequest(
         Boolean isActive,
         Boolean isAvailable,
         Boolean isTrending,
+        Boolean isPrepared,
         @Positive(message = "Recipe batch size must be greater than 0")
         Integer recipeBatchSize,
         List<@Valid IngredientUsageRequest> ingredients
@@ -60,6 +61,9 @@ public record ItemRequest(
         }
         if (this.isTrending() != null) {
             menuItem.setIsTrending(this.isTrending());
+        }
+        if (this.isPrepared() != null) {
+            menuItem.setIsPrepared(this.isPrepared());
         }
         if (this.isAvailable() != null) {
             menuItem.setIsAvailable(this.isAvailable());

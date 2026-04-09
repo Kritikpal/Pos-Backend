@@ -1,7 +1,8 @@
 package com.kritik.POS.inventory.service.Impl;
 
 import com.kritik.POS.common.model.PageResponse;
-import com.kritik.POS.inventory.entity.IngredientStock;
+import com.kritik.POS.inventory.entity.stock.IngredientStock;
+import com.kritik.POS.inventory.projection.IngredientStockListProjection;
 import com.kritik.POS.inventory.repository.IngredientStockRepository;
 import com.kritik.POS.inventory.service.IngredientService;
 import com.kritik.POS.inventory.util.InventoryUtil;
@@ -42,6 +43,24 @@ public class IngredientServiceImpl implements IngredientService {
                         PageRequest.of(pageNumber, pageSize)
                 )
                 .map(IngredientResponse::fromEntity);
+        return PageResponse.from(page);
+    }
+
+    @Override
+    public PageResponse<IngredientStockListProjection> getIngredientPageV2(Long chainId, Long restaurantId, Boolean isActive, Boolean lowStockOnly, String search, Integer pageNumber, Integer pageSize) {
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(chainId, restaurantId);
+        if (!tenantAccessService.isSuperAdmin() && accessibleRestaurantIds.isEmpty()) {
+            return new PageResponse<>(List.of(), pageNumber, pageSize, 0, 0, true);
+        }
+
+        Page<IngredientStockListProjection> page = ingredientStockRepository.findVisibleIngredientsV2(
+                tenantAccessService.isSuperAdmin(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+                isActive,
+                Boolean.TRUE.equals(lowStockOnly),
+                InventoryUtil.normalizeSearch(search),
+                PageRequest.of(pageNumber, pageSize)
+        );
         return PageResponse.from(page);
     }
 

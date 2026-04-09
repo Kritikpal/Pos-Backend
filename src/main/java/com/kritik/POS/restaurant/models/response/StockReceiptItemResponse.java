@@ -1,9 +1,9 @@
 package com.kritik.POS.restaurant.models.response;
 
-import com.kritik.POS.inventory.entity.IngredientStock;
-import com.kritik.POS.inventory.entity.ItemStock;
+import com.kritik.POS.inventory.entity.stock.IngredientStock;
+import com.kritik.POS.inventory.entity.stock.ItemStock;
 import com.kritik.POS.inventory.entity.enums.StockReceiptSkuType;
-import com.kritik.POS.inventory.entity.StockReceiptItem;
+import com.kritik.POS.inventory.entity.stockEntry.StockReceiptItem;
 import lombok.Data;
 
 @Data

@@ -1,16 +1,15 @@
 package com.kritik.POS.inventory.util;
 
 import com.kritik.POS.exception.errors.AppException;
-import com.kritik.POS.inventory.entity.IngredientStock;
-import com.kritik.POS.inventory.entity.ItemStock;
-import com.kritik.POS.inventory.entity.MenuItemIngredient;
-import com.kritik.POS.inventory.entity.Supplier;
+import com.kritik.POS.inventory.entity.stock.IngredientStock;
+import com.kritik.POS.inventory.entity.stock.ItemStock;
+import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
+import com.kritik.POS.inventory.entity.stockEntry.Supplier;
 import com.kritik.POS.inventory.repository.IngredientStockRepository;
 import com.kritik.POS.inventory.repository.MenuItemIngredientRepository;
 import com.kritik.POS.inventory.repository.StockRepository;
 import com.kritik.POS.inventory.repository.SupplierRepository;
 import com.kritik.POS.restaurant.entity.MenuItem;
-import com.kritik.POS.restaurant.util.InventoryAvailabilityUtil;
 import com.kritik.POS.security.service.TenantAccessService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -68,22 +67,7 @@ public class InventoryUtil {
         if (menuItem == null) {
             return;
         }
-        if (!Boolean.TRUE.equals(menuItem.getIsActive()) || Boolean.TRUE.equals(menuItem.getIsDeleted())) {
-            menuItem.setIsAvailable(false);
-            return;
-        }
-        if (InventoryAvailabilityUtil.hasRecipe(menuItem)) {
-            menuItem.setIsAvailable(InventoryAvailabilityUtil.isMenuItemAvailable(menuItem));
-            return;
-        }
-        if (menuItem.getItemStock() == null
-                || !Boolean.TRUE.equals(menuItem.getItemStock().getIsActive())
-                || menuItem.getItemStock().getTotalStock() == null
-                || menuItem.getItemStock().getTotalStock() <= 0) {
-            menuItem.setIsAvailable(false);
-            return;
-        }
-        menuItem.setIsAvailable(true);
+        menuItem.setIsAvailable(InventoryAvailabilityUtil.isMenuItemAvailable(menuItem));
     }
 
     public void syncMenuAvailabilityForIngredient(String ingredientSku) {

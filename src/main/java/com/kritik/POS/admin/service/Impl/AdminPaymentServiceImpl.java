@@ -3,16 +3,13 @@ package com.kritik.POS.admin.service.Impl;
 import com.kritik.POS.admin.models.response.OrderResponse;
 import com.kritik.POS.admin.models.response.ShortReport;
 import com.kritik.POS.admin.service.AdminPaymentService;
-import com.kritik.POS.admin.views.entity.HourlyPaymentView;
 import com.kritik.POS.admin.views.projection.MostOrderedMenuProjection;
-import com.kritik.POS.admin.views.repository.DailyKpiRepository;
-import com.kritik.POS.admin.views.repository.HourlyPaymentViewRepository;
-import com.kritik.POS.admin.views.repository.MostOrderedMenuRepository;
 import com.kritik.POS.common.util.StoreUtil;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
 import com.kritik.POS.order.model.response.LastOrderListItemProjection;
 import com.kritik.POS.order.model.response.PaymentByHour;
+import com.kritik.POS.order.model.response.PaymentByHourProjection;
 import com.kritik.POS.order.repository.OrderRepository;
 import com.kritik.POS.order.repository.SaleItemRepository;
 import com.kritik.POS.security.service.TenantAccessService;
@@ -31,10 +28,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminPaymentServiceImpl implements AdminPaymentService {
     private final OrderRepository orderRepository;
+    private final SaleItemRepository saleItemRepository;
     private final TenantAccessService tenantAccessService;
-    private final HourlyPaymentViewRepository hourlyPaymentViewRepository;
-    private final DailyKpiRepository dailyKpiRepository;
-    private final MostOrderedMenuRepository mostOrderedMenuRepository;
 
     @Override
     public List<OrderResponse> getAllOrdersToday(PaymentStatus paymentStatus, PaymentType paymentType, String orderId, LocalDate startDate, LocalDate endDate) {
@@ -81,18 +76,34 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
         boolean skipRestaurantFilter = tenantAccessService.isSuperAdmin();
         List<Long> restaurantIds = tenantAccessService.queryRestaurantIds(accessibleRestaurantIds);
 
-        List<Object[]> results = dailyKpiRepository.getAggregatedDailyKpi(
+        long successCount = orderRepository.countByPaymentStatusForReportWindow(
+                PaymentStatus.PAYMENT_SUCCESSFUL,
                 skipRestaurantFilter,
                 restaurantIds,
-                localDate
+                reportWindow.start(),
+                reportWindow.endExclusive()
         );
-
-        Object[] result = results.isEmpty() ? new Object[]{0, 0, 0, 0} : results.get(0);
-
-        long successCount = ((Number) result[0]).longValue();
-        long cancelCount = ((Number) result[1]).longValue();
-        double totalRevenue = ((Number) result[2]).doubleValue();
-        double avgOrderValue = ((Number) result[3]).doubleValue();
+        long cancelCount = orderRepository.countByPaymentStatusForReportWindow(
+                PaymentStatus.PAYMENT_CANCELED,
+                skipRestaurantFilter,
+                restaurantIds,
+                reportWindow.start(),
+                reportWindow.endExclusive()
+        );
+        double totalRevenue = defaultDouble(orderRepository.getTotalAmountByPaymentStatusForReportWindow(
+                reportWindow.start(),
+                reportWindow.endExclusive(),
+                skipRestaurantFilter,
+                restaurantIds,
+                PaymentStatus.PAYMENT_SUCCESSFUL
+        ));
+        double avgOrderValue = defaultDouble(orderRepository.findAverageOrderValueByPaymentStatusForReportWindow(
+                reportWindow.start(),
+                reportWindow.endExclusive(),
+                skipRestaurantFilter,
+                restaurantIds,
+                PaymentStatus.PAYMENT_SUCCESSFUL
+        ));
 
         double lastOrderValue = orderRepository.findLatestOrderAmountsByPaymentStatusForReportWindow(
                         PaymentStatus.PAYMENT_SUCCESSFUL,
@@ -112,33 +123,19 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
 
     @Override
     public List<PaymentByHour> getHourlyPaymentReport() {
-        List<Long> accessibleRestaurantIds =
-                tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+        List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
+        if (!tenantAccessService.isSuperAdmin() && accessibleRestaurantIds.isEmpty()) {
+            return buildHourlyResponse(List.of());
+        }
 
-        List<HourlyPaymentView> data = hourlyPaymentViewRepository.findHourlyPayments(
+        List<PaymentByHourProjection> data = orderRepository.countPaymentsByHour(
                 PaymentStatus.PAYMENT_SUCCESSFUL.ordinal(),
                 tenantAccessService.isSuperAdmin(),
                 tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
-                LocalDate.now()
+                LocalDate.now().atTime(StoreUtil.STORE_OPEN_TIME),
+                LocalDate.now().plusDays(1).atTime(StoreUtil.STORE_OPEN_TIME)
         );
-
-        Map<Integer, PaymentByHour> map = data.stream()
-                .collect(Collectors.toMap(
-                        HourlyPaymentView::getHourOfDay,
-                        v -> new PaymentByHour(
-                                v.getHourOfDay(),
-                                v.getTotalOrders(),
-                                v.getTotalRevenue()
-                        )
-                ));
-
-        List<PaymentByHour> response = new ArrayList<>(24);
-
-        for (int i = 0; i < 24; i++) {
-            response.add(map.getOrDefault(i, new PaymentByHour(i, 0L, 0.0)));
-        }
-
-        return response;
+        return buildHourlyResponse(data);
     }
 
 
@@ -156,14 +153,36 @@ public class AdminPaymentServiceImpl implements AdminPaymentService {
     @Override
     public List<MostOrderedMenuProjection> getMostOrderedItem(Integer lastDays, Integer limit) {
         List<Long> accessibleRestaurantIds = tenantAccessService.resolveAccessibleRestaurantIds(null, null);
-        return mostOrderedMenuRepository.findTopMenus(
-                PaymentStatus.PAYMENT_SUCCESSFUL.ordinal(),
-                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+        return saleItemRepository.findMostOrderedItemsByPaymentStatusAndDate(
+                PaymentStatus.PAYMENT_SUCCESSFUL,
                 tenantAccessService.isSuperAdmin(),
-                LocalDate.now().minusDays(lastDays),
-                LocalDate.now(),
+                tenantAccessService.queryRestaurantIds(accessibleRestaurantIds),
+                LocalDate.now().minusDays(lastDays == null ? 0 : lastDays).atStartOfDay(),
+                LocalDate.now().plusDays(1).atStartOfDay(),
                 PageRequest.of(0, limit)
         );
+    }
+
+    private List<PaymentByHour> buildHourlyResponse(List<PaymentByHourProjection> data) {
+        Map<Integer, PaymentByHour> map = data.stream()
+                .collect(Collectors.toMap(
+                        PaymentByHourProjection::getHourOfDay,
+                        projection -> new PaymentByHour(
+                                projection.getHourOfDay(),
+                                projection.getNumberOfPayments(),
+                                defaultDouble(projection.getTotalRevenue())
+                        )
+                ));
+
+        List<PaymentByHour> response = new ArrayList<>(24);
+        for (int i = 0; i < 24; i++) {
+            response.add(map.getOrDefault(i, new PaymentByHour(i, 0L, 0.0)));
+        }
+        return response;
+    }
+
+    private double defaultDouble(Double value) {
+        return value == null ? 0.0 : value;
     }
 
 

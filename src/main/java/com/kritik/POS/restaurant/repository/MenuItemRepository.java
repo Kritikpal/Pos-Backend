@@ -14,91 +14,45 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSpecificationExecutor<MenuItem> {
-    List<MenuItem> findAllByIsActiveOrderByIsTrendingDesc(boolean isActive);
     List<MenuItem> findAllByRestaurantIdAndIsDeletedFalse(Long restaurantId);
 
-    @EntityGraph(attributePaths = {"category", "itemPrice", "itemStock"})
+    @EntityGraph(attributePaths = {
+            "category",
+            "itemPrice",
+            "itemStock",
+            "itemStock.supplier",
+            "preparedItemStock",
+            "productImage",
+            "recipe",
+            "ingredientUsages",
+            "ingredientUsages.ingredientStock",
+            "ingredientUsages.ingredientStock.supplier"
+    })
     @Query("""
-            SELECT m
-            FROM MenuItem m
-            join fetch m.ingredientUsages
-            WHERE m.isActive = true
-              AND m.isDeleted = false
-              AND (:skipRestaurantFilter = true OR m.restaurantId IN :restaurantIds)
-              AND (:search IS NULL OR :search = '' OR LOWER(m.itemName) LIKE LOWER(CONCAT('%', :search, '%')))
-              AND (:categoryId IS NULL OR m.category.categoryId = :categoryId)
-            ORDER BY m.isTrending DESC, m.createdAt DESC
+            select distinct m
+            from MenuItem m
+            left join m.ingredientUsages ingredientUsage
+            left join ingredientUsage.ingredientStock ingredientStock
+            where m.id = :itemId
+              and m.isDeleted = false
+              and (:skipRestaurantFilter = true or m.restaurantId in :restaurantIds)
             """)
-    Page<MenuItem> searchDashboardItems(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
-                                        @Param("restaurantIds") Collection<Long> restaurantIds,
-                                        @Param("search") String search,
-                                        @Param("categoryId") Long categoryId,
-                                        Pageable pageable);
+    Optional<MenuItem> findDetailedById(@Param("itemId") Long itemId,
+                                        @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                        @Param("restaurantIds") Collection<Long> restaurantIds);
 
-    @Query(
-            value = """
-                    select m.id as id,
-                           pf.url as productImage,
-                           m.itemName as itemName,
-                           c.categoryName as categoryName,
-                           m.description as description,
-                           ip.price as itemPrice,
-                           m.isAvailable as isAvailable,
-                           m.isTrending as isTrending,
-                           case
-                               when m.hasRecipe = true then coalesce(
-                                   (
-                                       select min(
-                                           case
-                                               when mi.recipe.batchSize is null
-                                                    or mi.recipe.batchSize <= 0
-                                                    or mi.quantityRequired is null
-                                                    or mi.quantityRequired <= 0
-                                                    or ing.totalStock is null
-                                                    or ing.isActive = false
-                                                    or ing.isDeleted = true
-                                               then 0
-                                               else floor((ing.totalStock / mi.quantityRequired) * mi.recipe.batchSize)
-                                           end
-                                       )
-                                       from MenuItemIngredient mi
-                                       join mi.ingredientStock ing
-                                       where mi.menuItem = m
-                                   ),
-                                   0
-                               )
-                               else s.totalStock
-                           end as totalStockAvailable
-                    from MenuItem m
-                    join m.category c
-                    left join m.itemPrice ip
-                    left join m.itemStock s
-                    left join m.productImage pf
-                    where m.isActive = true
-                      and m.isDeleted = false
-                      and (:skipRestaurantFilter = true or m.restaurantId in :restaurantIds)
-                      and (:search is null or :search = '' or lower(m.itemName) like lower(concat('%', :search, '%')))
-                      and (:categoryId is null or c.categoryId = :categoryId)
-                    order by m.isTrending desc, m.createdAt desc
-                    """,
-            countQuery = """
-                    select count(m)
-                    from MenuItem m
-                    join m.category c
-                    where m.isActive = true
-                      and m.isDeleted = false
-                      and (:skipRestaurantFilter = true or m.restaurantId in :restaurantIds)
-                      and (:search is null or :search = '' or lower(m.itemName) like lower(concat('%', :search, '%')))
-                      and (:categoryId is null or c.categoryId = :categoryId)
-                    """
-    )
-    Page<UserDashboardMenuItemProjection> findDashboardItems(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
-                                                             @Param("restaurantIds") Collection<Long> restaurantIds,
-                                                             @Param("search") String search,
-                                                             @Param("categoryId") Long categoryId,
-                                                             Pageable pageable);
+    @EntityGraph(attributePaths = {
+            "itemStock",
+            "preparedItemStock",
+            "recipe",
+            "ingredientUsages",
+            "ingredientUsages.ingredientStock"
+    })
+    List<MenuItem> findAllByIdIn(Collection<Long> ids);
+
 
     @Query("""
             select m.id as id,
@@ -115,6 +69,20 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                    coalesce(m.hasRecipe, false) as recipeBased,
                    recipe.batchSize as batchSize,
                    case
+                       when coalesce(m.isPrepared, false) = true then coalesce(
+                           (
+                               select floor(
+                                   case
+                                       when pi.active = false then 0
+                                       when (coalesce(pi.availableQty, 0) - coalesce(pi.reservedQty, 0)) <= 0 then 0
+                                       else (coalesce(pi.availableQty, 0) - coalesce(pi.reservedQty, 0))
+                                   end
+                               )
+                               from PreparedItemStock pi
+                               where pi.menuItemId = m.id
+                           ),
+                           0
+                       )
                        when coalesce(m.hasRecipe, false) = true then coalesce(
                            (
                                select min(
@@ -139,18 +107,29 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                        else s.totalStock
                    end as totalStock,
                    case
+                       when coalesce(m.isPrepared, false) = true then null
                        when coalesce(m.hasRecipe, false) = true then null
                        else s.reorderLevel
                    end as reorderLevel,
                    case
+                       when coalesce(m.isPrepared, false) = true then coalesce(
+                           (
+                               select pi.unitCode
+                               from PreparedItemStock pi
+                               where pi.menuItemId = m.id
+                           ),
+                           'serving'
+                       )
                        when coalesce(m.hasRecipe, false) = true then 'serving'
                        else s.unitOfMeasure
                    end as unitOfMeasure,
                    case
+                       when coalesce(m.isPrepared, false) = true then null
                        when coalesce(m.hasRecipe, false) = true then null
                        else sup.supplierId
                    end as supplierId,
                    case
+                       when coalesce(m.isPrepared, false) = true then null
                        when coalesce(m.hasRecipe, false) = true then null
                        else sup.supplierName
                    end as supplierName,
@@ -204,6 +183,25 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
     int markDirectMenusAvailableByIds(@Param("menuIds") Collection<Long> menuIds);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
+
+    @Query("""
+            update MenuItem m
+            set m.isAvailable = true
+            where m.id in :menuIds
+              and m.isActive = true
+              and m.isDeleted = false
+              and coalesce(m.isPrepared, false) = true
+              and exists (
+                  select ps.menuItemId
+                  from PreparedItemStock ps
+                  where ps.menuItemId = m.id
+                    and ps.active = true
+                    and (coalesce(ps.availableQty, 0) - coalesce(ps.reservedQty, 0)) > 0
+              )
+            """)
+    int markPreparedMenusAvailableByIds(@Param("menuIds") Collection<Long> menuIds);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = """
             update menu_item m
             set is_available = case
@@ -235,4 +233,77 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
             where m.id in (:menuIds)
             """, nativeQuery = true)
     int refreshRecipeAvailabilityByIds(@Param("menuIds") Collection<Long> menuIds);
+
+    @Query(
+            value = """
+                    select m.id as id,
+                           pf.url as productImage,
+                           m.itemName as itemName,
+                           c.categoryName as categoryName,
+                           m.description as description,
+                           ip.price as itemPrice,
+                           m.isAvailable as isAvailable,
+                           m.isTrending as isTrending,
+                           CASE
+                           WHEN m.isPrepared = true THEN COALESCE(
+                            (select
+                                case
+                                    when pi.active = false then 0
+                                    when (coalesce(pi.availableQty, 0) - coalesce(pi.reservedQty, 0)) <= 0 then 0
+                                    else (coalesce(pi.availableQty, 0) - coalesce(pi.reservedQty, 0))
+                                end
+                             from PreparedItemStock pi
+                             where pi.menuItemId = m.id),0)
+                            WHEN m.hasRecipe = true THEN COALESCE(
+                            (
+                                SELECT MIN(
+                                    CASE
+                                        WHEN mi.recipe.batchSize IS NULL
+                                             OR mi.recipe.batchSize <= 0
+                                             OR mi.quantityRequired IS NULL
+                                             OR mi.quantityRequired <= 0
+                                             OR ing.totalStock IS NULL
+                                             OR ing.isActive = false
+                                             OR ing.isDeleted = true
+                                        THEN 0
+                                        ELSE FLOOR((ing.totalStock / mi.quantityRequired) * mi.recipe.batchSize)
+                                    END
+                                )
+                                FROM MenuItemIngredient mi
+                                JOIN mi.ingredientStock ing
+                                WHERE mi.menuItem = m
+                            ),
+                            0
+                        )
+                    
+                        ELSE s.totalStock
+                    END AS totalStockAvailable
+                    from MenuItem m
+                    join m.category c
+                    left join m.itemPrice ip
+                    left join m.itemStock s
+                    left join m.productImage pf
+                    where m.isActive = true
+                      and m.isDeleted = false
+                      and (:skipRestaurantFilter = true or m.restaurantId in :restaurantIds)
+                      and (:search is null or :search = '' or lower(m.itemName) like lower(concat('%', :search, '%')))
+                      and (:categoryId is null or c.categoryId = :categoryId)
+                    order by m.isTrending desc, m.createdAt desc
+                    """,
+            countQuery = """
+                    select count(m)
+                    from MenuItem m
+                    join m.category c
+                    where m.isActive = true
+                      and m.isDeleted = false
+                      and (:skipRestaurantFilter = true or m.restaurantId in :restaurantIds)
+                      and (:search is null or :search = '' or lower(m.itemName) like lower(concat('%', :search, '%')))
+                      and (:categoryId is null or c.categoryId = :categoryId)
+                    """
+    )
+    Page<UserDashboardMenuItemProjection> findDashboardItems(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                                             @Param("restaurantIds") Collection<Long> restaurantIds,
+                                                             @Param("search") String search,
+                                                             @Param("categoryId") Long categoryId,
+                                                             Pageable pageable);
 }

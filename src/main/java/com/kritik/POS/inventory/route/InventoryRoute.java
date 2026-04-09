@@ -11,6 +11,7 @@ public final class InventoryRoute {
     public static final String UPDATE_STOCK = "/stocks/{sku}";
 
     public static final String GET_INGREDIENTS_PAGE = "/ingredients";
+    public static final String GET_INGREDIENTS_PAGE_V2 = "/v2/ingredients";
     public static final String GET_INGREDIENT = "/ingredients/{sku}";
     public static final String SAVE_INGREDIENT = "/ingredients";
     public static final String DELETE_INGREDIENT = "/ingredients/{sku}";
@@ -25,6 +26,10 @@ public final class InventoryRoute {
     public static final String GET_RECEIPT_SKUS = "/receipts/skus";
     public static final String GET_RECEIPT = "/receipts/{id}";
     public static final String CREATE_RECEIPT = "/receipts";
+
+    public static final String GET_PRODUCTION_ENTRIES = "/production-entries";
+    public static final String GET_PRODUCTION_ENTRY = "/production-entries/{id}";
+    public static final String CREATE_PRODUCTION_ENTRY = "/production-entries";
 
     private InventoryRoute() {
     }

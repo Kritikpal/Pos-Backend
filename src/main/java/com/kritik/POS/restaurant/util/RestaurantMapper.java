@@ -7,7 +7,10 @@ import com.kritik.POS.restaurant.models.request.RestaurantSetupRequest;
 import com.kritik.POS.restaurant.models.response.RestaurantSetupResponse;
 import com.kritik.POS.user.entity.User;
 
-public class RestaurantMapper {
+public final class RestaurantMapper {
+
+    private RestaurantMapper() {
+    }
 
     public static RestaurantChain toChain(RestaurantSetupRequest req) {
         return RestaurantChain.builder()
@@ -20,7 +23,7 @@ public class RestaurantMapper {
                 .build();
     }
 
-    public static  RestaurantSetupResponse buildResponse(
+    public static RestaurantSetupResponse buildResponse(
             RestaurantChain chain,
             Restaurant restaurant,
             String adminEmail
@@ -33,6 +36,7 @@ public class RestaurantMapper {
                 .adminEmail(adminEmail)
                 .build();
     }
+
     public static Restaurant toRestaurant(RestaurantRequest req, RestaurantChain chain) {
         return Restaurant.builder()
                 .name(req.getRestaurantName())

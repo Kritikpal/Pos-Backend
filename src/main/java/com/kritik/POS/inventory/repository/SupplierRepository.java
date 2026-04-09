@@ -1,6 +1,6 @@
 package com.kritik.POS.inventory.repository;
 
-import com.kritik.POS.inventory.entity.Supplier;
+import com.kritik.POS.inventory.entity.stockEntry.Supplier;
 import com.kritik.POS.inventory.projection.SupplierSummaryProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;

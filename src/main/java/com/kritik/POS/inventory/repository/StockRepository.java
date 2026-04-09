@@ -1,6 +1,6 @@
 package com.kritik.POS.inventory.repository;
 
-import com.kritik.POS.inventory.entity.ItemStock;
+import com.kritik.POS.inventory.entity.stock.ItemStock;
 import com.kritik.POS.inventory.projection.StockReceiptSkuProjection;
 import com.kritik.POS.inventory.projection.StockSummaryProjection;
 import org.springframework.data.domain.Page;

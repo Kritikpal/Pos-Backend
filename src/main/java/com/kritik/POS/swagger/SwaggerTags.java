@@ -8,6 +8,7 @@ public class SwaggerTags {
     public static final String INGREDIENT = "ingredient";
     public static final String SUPPLIER = "supplier";
     public static final String STOCK_RECEIPT = "stock-receipt";
+    public static final String PRODUCTION_ENTRY = "production-entry";
     public static final String AUTH = "auth";
     public static final String USER = "user";
     public static final String ORDER = "order";

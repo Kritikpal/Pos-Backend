@@ -4,7 +4,7 @@ import com.kritik.POS.events.OrderCompletedEvent;
 import com.kritik.POS.inventory.service.InventoryService;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.exception.errors.OrderException;
-import com.kritik.POS.exception.errors.StockException;
+import com.kritik.POS.inventory.util.InventoryUtil;
 import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.entity.OrderTax;
 import com.kritik.POS.order.entity.SaleItem;
@@ -17,12 +17,9 @@ import com.kritik.POS.order.model.response.PaymentProcessingResponse;
 import com.kritik.POS.order.repository.OrderRepository;
 import com.kritik.POS.order.service.OrderService;
 import com.kritik.POS.order.util.OrderUtil;
-import com.kritik.POS.inventory.entity.IngredientStock;
 import com.kritik.POS.restaurant.entity.MenuItem;
-import com.kritik.POS.inventory.entity.MenuItemIngredient;
 import com.kritik.POS.restaurant.models.request.StockRequest;
-import com.kritik.POS.inventory.repository.IngredientStockRepository;
-import com.kritik.POS.restaurant.util.InventoryAvailabilityUtil;
+import com.kritik.POS.inventory.util.InventoryAvailabilityUtil;
 import com.kritik.POS.restaurant.util.RestaurantUtil;
 import com.kritik.POS.security.models.SecurityUser;
 import com.kritik.POS.security.service.TenantAccessService;
@@ -37,7 +34,6 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,7 +43,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
-    private final IngredientStockRepository ingredientStockRepository;
     private final InventoryService inventoryService;
     private final TaxService taxService;
     private final ApplicationEventPublisher eventPublisher;
@@ -174,6 +169,7 @@ public class OrderServiceImpl implements OrderService {
         List<SaleItem> saleItemList = new ArrayList<>();
         List<StockRequest> stockRequestList = new ArrayList<>();
         Map<String, Double> ingredientRequirements = new HashMap<>();
+        Map<Long, Double> preparedRequirements = new HashMap<>();
         Long orderRestaurantId = null;
 
         for (InitiateOrderRequest.OrderItemRequest orderItemRequest : initiateOrderRequest.getOrderItems()) {
@@ -186,23 +182,18 @@ public class OrderServiceImpl implements OrderService {
             saleItem.setSaleItemPrice(RestaurantUtil.getMenuItemPrice(menuItem.getItemPrice()));
             saleItem.setMenuItem(menuItem);
             saleItem.setRestaurantId(menuItem.getRestaurantId());
-            if (InventoryAvailabilityUtil.hasRecipe(menuItem)) {
-                for (MenuItemIngredient ingredientUsage : menuItem.getIngredientUsages()) {
-                    ingredientRequirements.merge(
-                            ingredientUsage.getIngredientStock().getSku(),
-                            InventoryAvailabilityUtil.computeRequiredIngredientQuantity(ingredientUsage, saleItem.getAmount()),
-                            Double::sum
-                    );
-                }
-            } else if (menuItem.getItemStock() != null) {
-                stockRequestList.add(new StockRequest(menuItem.getItemStock().getSku(), saleItem.getAmount()));
-            }
+            InventoryAvailabilityUtil.accumulateStockRequirements(
+                    menuItem,
+                    saleItem.getAmount(),
+                    stockRequestList,
+                    ingredientRequirements,
+                    preparedRequirements
+            );
             saleItem.setOrder(order);
             saleItemList.add(saleItem);
         }
 
-        inventoryService.checkStockAvailable(stockRequestList);
-        checkIngredientStockAvailable(ingredientRequirements);
+        inventoryService.checkOrderStockAvailability(stockRequestList, ingredientRequirements, preparedRequirements);
         replaceOrderItems(order, saleItemList);
         order.setRestaurantId(orderRestaurantId);
         replaceOrderTaxes(order, buildOrderTaxes(order, orderRestaurantId));
@@ -274,24 +265,20 @@ public class OrderServiceImpl implements OrderService {
     private void validateCurrentOrderStock(Order order) {
         List<StockRequest> stockRequestList = new ArrayList<>();
         Map<String, Double> ingredientRequirements = new HashMap<>();
+        Map<Long, Double> preparedRequirements = new HashMap<>();
 
         for (SaleItem saleItem : order.getOrderItemList()) {
             MenuItem menuItem = inventoryService.getAccessibleMenuItem(saleItem.getMenuItem().getId());
-            if (InventoryAvailabilityUtil.hasRecipe(menuItem)) {
-                for (MenuItemIngredient ingredientUsage : menuItem.getIngredientUsages()) {
-                    ingredientRequirements.merge(
-                            ingredientUsage.getIngredientStock().getSku(),
-                            InventoryAvailabilityUtil.computeRequiredIngredientQuantity(ingredientUsage, saleItem.getAmount()),
-                            Double::sum
-                    );
-                }
-            } else if (menuItem.getItemStock() != null) {
-                stockRequestList.add(new StockRequest(menuItem.getItemStock().getSku(), saleItem.getAmount()));
-            }
+            InventoryAvailabilityUtil.accumulateStockRequirements(
+                    menuItem,
+                    saleItem.getAmount(),
+                    stockRequestList,
+                    ingredientRequirements,
+                    preparedRequirements
+            );
         }
 
-        inventoryService.checkStockAvailable(stockRequestList);
-        checkIngredientStockAvailable(ingredientRequirements);
+        inventoryService.checkOrderStockAvailability(stockRequestList, ingredientRequirements, preparedRequirements);
     }
 
     private void applyPaymentAudit(Order order, CompletePaymentRequest request) {
@@ -323,24 +310,9 @@ public class OrderServiceImpl implements OrderService {
     }
 
     private String trimToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        return InventoryUtil.trimToNull(value);
     }
 
-    private Order getAccessibleOrder(String orderId) {
-        Order order = orderRepository.findByOrderId(orderId).orElseThrow(OrderException::new);
-        validateAccessibleOrder(order);
-        return order;
-    }
-
-    private Order getAccessibleOrderWithItems(String orderId) {
-        Order order = orderRepository.findByOrderIdWithItems(orderId).orElseThrow(OrderException::new);
-        validateAccessibleOrder(order);
-        return order;
-    }
 
     private Order getAccessibleOrderWithItemsForUpdate(String orderId) {
         Order order = orderRepository.findByOrderIdWithItemsForUpdate(orderId).orElseThrow(OrderException::new);
@@ -357,30 +329,4 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private void checkIngredientStockAvailable(Map<String, Double> ingredientRequirements) {
-        if (ingredientRequirements.isEmpty()) {
-            return;
-        }
-        List<IngredientStock> ingredients = ingredientStockRepository.findAllBySkuInAndIsDeletedFalse(ingredientRequirements.keySet());
-        Map<String, IngredientStock> ingredientMap = new HashMap<>();
-        for (IngredientStock ingredient : ingredients) {
-            if (!tenantAccessService.isSuperAdmin()) {
-                tenantAccessService.resolveAccessibleRestaurantId(ingredient.getRestaurantId());
-            }
-            ingredientMap.put(ingredient.getSku(), ingredient);
-        }
-
-        for (Map.Entry<String, Double> entry : ingredientRequirements.entrySet()) {
-            IngredientStock ingredient = ingredientMap.get(entry.getKey());
-            if (ingredient == null) {
-                throw new StockException("Ingredient stock not found");
-            }
-            if (!Boolean.TRUE.equals(ingredient.getIsActive())) {
-                throw new StockException(ingredient.getIngredientName() + " stock is inactive.");
-            }
-            if (ingredient.getTotalStock() == null || ingredient.getTotalStock() < entry.getValue()) {
-                throw new StockException(ingredient.getIngredientName() + " is not available in stock only " + ingredient.getTotalStock() + " left.");
-            }
-        }
-    }
 }
