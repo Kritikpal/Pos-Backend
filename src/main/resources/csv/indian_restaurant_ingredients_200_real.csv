@@ -1,0 +1,202 @@
+
+sku,ingredient_name,description,restaurant_id,total_stock,unit_code,category
+ING0001,Turmeric Powder,Ground turmeric used in curries and marinades,1,0.0,KG,Spice
+ING0002,Red Chilli Powder,Ground dried red chilli for heat and color,1,0.0,KG,Spice
+ING0003,Kashmiri Chilli Powder,Mild chilli powder for bright red color,1,0.0,KG,Spice
+ING0004,Coriander Powder,Ground coriander seeds used in masalas,1,0.0,KG,Spice
+ING0005,Cumin Powder,Ground cumin for gravies and spice blends,1,0.0,KG,Spice
+ING0006,Cumin Seeds,Whole jeera for tempering and rice dishes,1,0.0,KG,Spice
+ING0007,Mustard Seeds,Rai used in tempering,1,0.0,KG,Spice
+ING0008,Fenugreek Seeds,Methi seeds for pickles and tempering,1,0.0,KG,Spice
+ING0009,Fennel Seeds,Saunf used in curries and spice mixes,1,0.0,KG,Spice
+ING0010,Carom Seeds,Ajwain used in breads and snacks,1,0.0,KG,Spice
+ING0011,Nigella Seeds,Kalonji for breads and pickles,1,0.0,KG,Spice
+ING0012,Black Pepper,Whole peppercorns,1,0.0,KG,Spice
+ING0013,Black Pepper Powder,Ground black pepper,1,0.0,KG,Spice
+ING0014,Green Cardamom,Elaichi used in biryani and desserts,1,0.0,KG,Spice
+ING0015,Black Cardamom,Badi elaichi for smoky gravies,1,0.0,KG,Spice
+ING0016,Cloves,Laung used in rice and masalas,1,0.0,KG,Spice
+ING0017,Cinnamon Sticks,Dalchini sticks,1,0.0,KG,Spice
+ING0018,Cassia Bark,Cassia bark used as a cinnamon substitute,1,0.0,KG,Spice
+ING0019,Bay Leaf,Tej patta for gravies and pulao,1,0.0,KG,Spice
+ING0020,Star Anise,Chakri phool for biryani and sauces,1,0.0,KG,Spice
+ING0021,Mace,Javitri spice,1,0.0,KG,Spice
+ING0022,Nutmeg,Jaiphal whole nutmeg,1,0.0,KG,Spice
+ING0023,Stone Flower,Dagad phool used in regional masalas,1,0.0,KG,Spice
+ING0024,Dry Ginger Powder,Sonth powder,1,0.0,KG,Spice
+ING0025,Amchur Powder,Dry mango powder for tanginess,1,0.0,KG,Spice
+ING0026,Chaat Masala,Tangy spice blend,1,0.0,KG,Spice
+ING0027,Garam Masala,General purpose spice blend,1,0.0,KG,Spice
+ING0028,Biryani Masala,Masala blend for biryani,1,0.0,KG,Spice
+ING0029,Kitchen King Masala,All purpose Indian curry masala,1,0.0,KG,Spice
+ING0030,Pav Bhaji Masala,Masala blend for pav bhaji,1,0.0,KG,Spice
+ING0031,Sambar Powder,Masala blend for sambar,1,0.0,KG,Spice
+ING0032,Rasam Powder,Masala blend for rasam,1,0.0,KG,Spice
+ING0033,Tandoori Masala,Blend for tandoori marinade,1,0.0,KG,Spice
+ING0034,Chicken Masala,Blend for chicken curries,1,0.0,KG,Spice
+ING0035,Meat Masala,Blend for mutton and meat curries,1,0.0,KG,Spice
+ING0036,Kasuri Methi,Dried fenugreek leaves,1,0.0,KG,Spice
+ING0037,Sesame Seeds,Til for chutneys and breads,1,0.0,KG,Spice
+ING0038,Poppy Seeds,Khus khus for gravies and sweets,1,0.0,KG,Spice
+ING0039,Asafoetida,Hing used in tempering,1,0.0,KG,Spice
+ING0040,White Pepper Powder,Ground white pepper,1,0.0,KG,Spice
+ING0041,Paprika,Mild red pepper powder,1,0.0,KG,Spice
+ING0042,Saffron,Kesar strands,1,0.0,GM,Spice
+ING0043,Tamarind Paste,Concentrated tamarind pulp,1,0.0,KG,Condiment
+ING0044,Dry Tamarind,Whole tamarind pulp,1,0.0,KG,Condiment
+ING0045,Rock Salt,Sendha namak,1,0.0,KG,Seasoning
+ING0046,Table Salt,Refined edible salt,1,0.0,KG,Seasoning
+ING0047,Black Salt,Kala namak for chaat and raita,1,0.0,KG,Seasoning
+ING0048,Sugar,Granulated sugar,1,0.0,KG,Sweetener
+ING0049,Jaggery,Gur blocks or powder,1,0.0,KG,Sweetener
+ING0050,Brown Sugar,Brown sugar for sauces and desserts,1,0.0,KG,Sweetener
+ING0051,Refined Oil,Neutral cooking oil,1,0.0,LTR,Oil
+ING0052,Mustard Oil,Traditional pungent cooking oil,1,0.0,LTR,Oil
+ING0053,Groundnut Oil,Peanut cooking oil,1,0.0,LTR,Oil
+ING0054,Sunflower Oil,Sunflower cooking oil,1,0.0,LTR,Oil
+ING0055,Sesame Oil,Til oil for South Indian cooking,1,0.0,LTR,Oil
+ING0056,Coconut Oil,Coconut cooking oil,1,0.0,LTR,Oil
+ING0057,Olive Oil,Oil for special recipes and salads,1,0.0,LTR,Oil
+ING0058,Ghee,Clarified butter,1,0.0,KG,Dairy
+ING0059,Butter,Salted or unsalted butter,1,0.0,KG,Dairy
+ING0060,White Vinegar,General purpose vinegar,1,0.0,LTR,Condiment
+ING0061,Apple Cider Vinegar,Vinegar for dressings and marinades,1,0.0,LTR,Condiment
+ING0062,Rose Water,Flavoring for desserts,1,0.0,LTR,Flavoring
+ING0063,Kewra Water,Aromatic water for biryani and desserts,1,0.0,LTR,Flavoring
+ING0064,Vanilla Essence,Dessert flavoring,1,0.0,LTR,Flavoring
+ING0065,Lemon Juice,Fresh or bottled lemon juice,1,0.0,LTR,Condiment
+ING0066,Basmati Rice,Long grain aromatic rice,1,0.0,KG,Grain
+ING0067,Sona Masoori Rice,Medium grain rice,1,0.0,KG,Grain
+ING0068,Kolam Rice,Everyday table rice,1,0.0,KG,Grain
+ING0069,Boiled Rice,Parboiled rice,1,0.0,KG,Grain
+ING0070,Poha,Flattened rice,1,0.0,KG,Grain
+ING0071,Semolina,Sooji or rava,1,0.0,KG,Grain
+ING0072,Whole Wheat Flour,Atta for breads,1,0.0,KG,Flour
+ING0073,Refined Flour,Maida for breads and snacks,1,0.0,KG,Flour
+ING0074,Gram Flour,Besan,1,0.0,KG,Flour
+ING0075,Rice Flour,Ground rice flour,1,0.0,KG,Flour
+ING0076,Corn Flour,Fine corn flour for coating and sauces,1,0.0,KG,Flour
+ING0077,Corn Starch,Starch for thickening,1,0.0,KG,Flour
+ING0078,Jowar Flour,Sorghum flour,1,0.0,KG,Flour
+ING0079,Bajra Flour,Pearl millet flour,1,0.0,KG,Flour
+ING0080,Ragi Flour,Finger millet flour,1,0.0,KG,Flour
+ING0081,Bread Crumbs,Crumbs for coating,1,0.0,KG,Bakery
+ING0082,Oats,Rolled or quick oats,1,0.0,KG,Grain
+ING0083,Sabudana,Tapioca pearls,1,0.0,KG,Grain
+ING0084,Urad Dal,Black gram split or whole,1,0.0,KG,Pulse
+ING0085,Toor Dal,Pigeon pea dal,1,0.0,KG,Pulse
+ING0086,Moong Dal,Green gram dal,1,0.0,KG,Pulse
+ING0087,Masoor Dal,Red lentils,1,0.0,KG,Pulse
+ING0088,Chana Dal,Split Bengal gram,1,0.0,KG,Pulse
+ING0089,Rajma,Kidney beans,1,0.0,KG,Pulse
+ING0090,Kabuli Chana,White chickpeas,1,0.0,KG,Pulse
+ING0091,Kala Chana,Brown chickpeas,1,0.0,KG,Pulse
+ING0092,Whole Green Moong,Whole green gram,1,0.0,KG,Pulse
+ING0093,Black Eyed Peas,Lobia beans,1,0.0,KG,Pulse
+ING0094,Soy Chunks,Textured soy protein nuggets,1,0.0,KG,Protein
+ING0095,Vermicelli,Seviyan,1,0.0,KG,Grain
+ING0096,Milk,Full cream milk,1,0.0,LTR,Dairy
+ING0097,Curd,Dahi for marinades and sides,1,0.0,KG,Dairy
+ING0098,Fresh Cream,Table cream,1,0.0,LTR,Dairy
+ING0099,Paneer,Fresh cottage cheese,1,0.0,KG,Dairy
+ING0100,Cheddar Cheese,Processed or block cheddar,1,0.0,KG,Dairy
+ING0101,Mozzarella Cheese,Cheese for pizza and fusion dishes,1,0.0,KG,Dairy
+ING0102,Khoya,Reduced milk solids,1,0.0,KG,Dairy
+ING0103,Condensed Milk,Sweetened condensed milk,1,0.0,LTR,Dairy
+ING0104,Milk Powder,Dry milk powder,1,0.0,KG,Dairy
+ING0105,Hung Curd,Strained curd for tikka and dips,1,0.0,KG,Dairy
+ING0106,Bread Loaf,Sliced bread for snacks,1,0.0,PCS,Bakery
+ING0107,Burger Buns,Buns for burgers and vada pav,1,0.0,PCS,Bakery
+ING0108,Pav,Pav bread,1,0.0,PCS,Bakery
+ING0109,Pizza Base,Prepared pizza base,1,0.0,PCS,Bakery
+ING0110,Onion,Fresh onions,1,0.0,KG,Vegetable
+ING0111,Tomato,Fresh tomatoes,1,0.0,KG,Vegetable
+ING0112,Potato,Fresh potatoes,1,0.0,KG,Vegetable
+ING0113,Garlic,Whole garlic bulbs,1,0.0,KG,Vegetable
+ING0114,Ginger,Fresh ginger root,1,0.0,KG,Vegetable
+ING0115,Green Chilli,Fresh hot green chillies,1,0.0,KG,Vegetable
+ING0116,Coriander Leaves,Fresh dhania leaves,1,0.0,KG,Herb
+ING0117,Mint Leaves,Fresh pudina leaves,1,0.0,KG,Herb
+ING0118,Curry Leaves,Fresh curry leaves,1,0.0,KG,Herb
+ING0119,Spinach,Palak leaves,1,0.0,KG,Vegetable
+ING0120,Fenugreek Leaves,Fresh methi leaves,1,0.0,KG,Vegetable
+ING0121,Cabbage,Fresh cabbage,1,0.0,KG,Vegetable
+ING0122,Cauliflower,Fresh cauliflower,1,0.0,KG,Vegetable
+ING0123,Green Peas,Fresh or frozen peas,1,0.0,KG,Vegetable
+ING0124,Capsicum,Green bell pepper,1,0.0,KG,Vegetable
+ING0125,Red Bell Pepper,Red capsicum,1,0.0,KG,Vegetable
+ING0126,Yellow Bell Pepper,Yellow capsicum,1,0.0,KG,Vegetable
+ING0127,Carrot,Fresh carrots,1,0.0,KG,Vegetable
+ING0128,Beans,French beans,1,0.0,KG,Vegetable
+ING0129,Beetroot,Fresh beetroot,1,0.0,KG,Vegetable
+ING0130,Cucumber,Fresh cucumber,1,0.0,KG,Vegetable
+ING0131,Bottle Gourd,Lauki,1,0.0,KG,Vegetable
+ING0132,Ridge Gourd,Turai,1,0.0,KG,Vegetable
+ING0133,Bitter Gourd,Karela,1,0.0,KG,Vegetable
+ING0134,Pumpkin,Kaddu,1,0.0,KG,Vegetable
+ING0135,Brinjal,Eggplant or baingan,1,0.0,KG,Vegetable
+ING0136,Okra,Bhindi,1,0.0,KG,Vegetable
+ING0137,Drumstick,Moringa pods,1,0.0,KG,Vegetable
+ING0138,Radish,Mooli,1,0.0,KG,Vegetable
+ING0139,Raw Banana,Plantain,1,0.0,KG,Vegetable
+ING0140,Yam,Suran or elephant foot yam,1,0.0,KG,Vegetable
+ING0141,Sweet Corn,Corn kernels,1,0.0,KG,Vegetable
+ING0142,Mushroom,Button mushrooms,1,0.0,KG,Vegetable
+ING0143,Spring Onion,Green onion,1,0.0,KG,Vegetable
+ING0144,Lettuce,Leaf lettuce for salads and wraps,1,0.0,KG,Vegetable
+ING0145,Raw Papaya,Green papaya for salads and tenderizing,1,0.0,KG,Vegetable
+ING0146,Lemon,Fresh lemons,1,0.0,KG,Fruit
+ING0147,Green Mango,Raw mango for chutney and pickle,1,0.0,KG,Fruit
+ING0148,Coconut,Whole mature coconut,1,0.0,PCS,Vegetable
+ING0149,Fresh Coconut Grated,Grated coconut,1,0.0,KG,Vegetable
+ING0150,Tender Coconut,Young coconut water and flesh,1,0.0,PCS,Fruit
+ING0151,Cashew Nuts,Whole cashews for gravies and sweets,1,0.0,KG,Dry Fruit
+ING0152,Almonds,Badam,1,0.0,KG,Dry Fruit
+ING0153,Pistachios,Pista,1,0.0,KG,Dry Fruit
+ING0154,Raisins,Kishmish,1,0.0,KG,Dry Fruit
+ING0155,Dates,Seedless dates,1,0.0,KG,Dry Fruit
+ING0156,Peanuts,Groundnuts,1,0.0,KG,Nut
+ING0157,Walnuts,Akhrot,1,0.0,KG,Dry Fruit
+ING0158,Watermelon Seeds,Magaz seeds,1,0.0,KG,Dry Fruit
+ING0159,Charoli Seeds,Chironji seeds,1,0.0,KG,Dry Fruit
+ING0160,Anardana,Dried pomegranate seeds,1,0.0,KG,Spice
+ING0161,Tomato Ketchup,Sweet tomato sauce,1,0.0,LTR,Condiment
+ING0162,Green Chilli Sauce,Spicy green chilli sauce,1,0.0,LTR,Condiment
+ING0163,Red Chilli Sauce,Red chilli sauce,1,0.0,LTR,Condiment
+ING0164,Soy Sauce,Dark or light soy sauce,1,0.0,LTR,Condiment
+ING0165,Vinegar Chilli,Green chilli in vinegar,1,0.0,LTR,Condiment
+ING0166,Mayonnaise,Egg or veg mayo,1,0.0,KG,Condiment
+ING0167,Schezwan Sauce,Hot Indo-Chinese sauce,1,0.0,KG,Condiment
+ING0168,Pizza Sauce,Prepared pizza sauce,1,0.0,KG,Condiment
+ING0169,Mustard Sauce,Prepared mustard condiment,1,0.0,KG,Condiment
+ING0170,Mint Chutney,Prepared mint chutney base,1,0.0,KG,Condiment
+ING0171,Tamarind Chutney,Sweet and tangy chutney,1,0.0,KG,Condiment
+ING0172,Pickle,Indian mixed or mango pickle,1,0.0,KG,Condiment
+ING0173,Honey,Natural honey,1,0.0,KG,Sweetener
+ING0174,Egg,Whole hen egg,1,0.0,PCS,Protein
+ING0175,Chicken Whole,Whole dressed chicken,1,0.0,KG,Meat
+ING0176,Chicken Boneless,Boneless chicken pieces,1,0.0,KG,Meat
+ING0177,Chicken With Bone,Bone-in chicken curry cut,1,0.0,KG,Meat
+ING0178,Chicken Mince,Keema chicken,1,0.0,KG,Meat
+ING0179,Mutton,Goat meat curry cut,1,0.0,KG,Meat
+ING0180,Mutton Mince,Keema mutton,1,0.0,KG,Meat
+ING0181,Fish Fillet,Boneless fish fillet,1,0.0,KG,Seafood
+ING0182,Whole Fish,Fresh whole fish,1,0.0,KG,Seafood
+ING0183,Prawns,Cleaned prawns,1,0.0,KG,Seafood
+ING0184,Tea Leaves,Black tea leaves,1,0.0,KG,Beverage
+ING0185,Coffee Powder,Ground coffee,1,0.0,KG,Beverage
+ING0186,Cocoa Powder,Unsweetened cocoa powder,1,0.0,KG,Beverage
+ING0187,Baking Powder,Leavening agent,1,0.0,KG,Baking
+ING0188,Baking Soda,Sodium bicarbonate,1,0.0,KG,Baking
+ING0189,Yeast,Dry active yeast,1,0.0,KG,Baking
+ING0190,Gelatin,Setting agent,1,0.0,KG,Baking
+ING0191,Custard Powder,Dessert thickener,1,0.0,KG,Dessert
+ING0192,Falooda Sev,Fine vermicelli for falooda,1,0.0,KG,Dessert
+ING0193,Sabja Seeds,Basil seeds for drinks and desserts,1,0.0,KG,Dessert
+ING0194,Ice Cream Mix,Base mix for kulfi or dessert prep,1,0.0,KG,Dessert
+ING0195,Rooh Afza Syrup,Rose flavored sharbat syrup,1,0.0,LTR,Beverage
+ING0196,Mango Pulp,Prepared mango pulp,1,0.0,KG,Fruit
+ING0197,Pineapple Slices,Canned or fresh pineapple slices,1,0.0,KG,Fruit
+ING0198,Orange Food Color,Food-grade color for sweets and snacks,1,0.0,LTR,Additive
+ING0199,Yellow Food Color,Food-grade yellow color,1,0.0,LTR,Additive
+ING0200,Green Food Color,Food-grade green color,1,0.0,LTR,Additive

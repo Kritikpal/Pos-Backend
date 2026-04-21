@@ -13,6 +13,8 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -34,11 +36,16 @@ public class IngredientStock {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(length = 120)
+    private String category;
+
     @Column(name = "restaurant_id", nullable = false)
     private Long restaurantId;
 
     @ManyToOne
     @JoinColumn(name = "supplier_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Supplier supplier;
 
     @Column(nullable = false)
@@ -66,6 +73,8 @@ public class IngredientStock {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "ingredientStock")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private List<MenuItemIngredient> menuItemIngredients = new ArrayList<>();
 
     @PrePersist

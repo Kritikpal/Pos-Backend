@@ -6,10 +6,12 @@ import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
 import com.kritik.POS.inventory.entity.recipi.MenuRecipe;
 import com.kritik.POS.inventory.entity.stock.ItemStock;
 import com.kritik.POS.inventory.repository.IngredientStockRepository;
+import com.kritik.POS.inventory.repository.PreparedItemStockRepository;
 import com.kritik.POS.order.repository.SaleItemRepository;
 import com.kritik.POS.restaurant.entity.Category;
 import com.kritik.POS.restaurant.entity.ItemPrice;
 import com.kritik.POS.restaurant.entity.MenuItem;
+import com.kritik.POS.restaurant.entity.enums.MenuType;
 import com.kritik.POS.restaurant.mapper.RestaurantDtoMapper;
 import com.kritik.POS.restaurant.models.request.ItemRequest;
 import com.kritik.POS.restaurant.models.response.MenuResponse;
@@ -66,6 +68,9 @@ class RestaurantServiceImplTest {
     @Mock
     private IngredientStockRepository ingredientStockRepository;
 
+    @Mock
+    private PreparedItemStockRepository preparedItemStockRepository;
+
     @InjectMocks
     private RestaurantServiceImpl restaurantService;
 
@@ -97,6 +102,10 @@ class RestaurantServiceImplTest {
                 true,
                 false,
                 true,
+                MenuType.PREPARED,
+                "serving",
+                0.0,
+                0.0,
                 4,
                 List.of(
                         new ItemRequest.IngredientUsageRequest("ING-1", 2.0),
@@ -110,6 +119,8 @@ class RestaurantServiceImplTest {
         when(menuItemRepository.findDetailedById(menuItemId, false, accessibleRestaurantIds)).thenReturn(Optional.of(existingMenuItem));
         when(categoryRepository.findOne(any(Specification.class))).thenReturn(Optional.of(category));
         when(ingredientStockRepository.findAllBySkuInAndIsDeletedFalse(any())).thenReturn(List.of(bun, patty));
+        when(preparedItemStockRepository.findById(menuItemId)).thenReturn(Optional.empty());
+        when(preparedItemStockRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(menuItemRepository.save(any(MenuItem.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         MenuResponse response = restaurantService.addEditMenuItem(itemRequest, null);
@@ -139,6 +150,7 @@ class RestaurantServiceImplTest {
         menuItem.setIsAvailable(true);
         menuItem.setIsDeleted(false);
         menuItem.setIsTrending(false);
+        menuItem.setMenuType(MenuType.PREPARED);
 
         ItemPrice itemPrice = new ItemPrice();
         itemPrice.setPrice(149.0);

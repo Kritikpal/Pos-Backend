@@ -87,7 +87,7 @@ public interface StockRepository extends JpaRepository<ItemStock, String> {
             left join s.supplier sup
             where s.isDeleted = false
               and m.isDeleted = false
-              and coalesce(m.hasRecipe, false) = false
+              and m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.DIRECT
               and (:skipRestaurantFilter = true or s.restaurantId in :restaurantIds)
               and (:supplierId is null or sup.supplierId = :supplierId)
             order by lower(m.itemName), s.sku

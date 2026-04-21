@@ -5,8 +5,7 @@ import com.kritik.POS.restaurant.dto.MenuItemResponseDto;
 import com.kritik.POS.restaurant.projection.CategorySummaryProjection;
 import com.kritik.POS.restaurant.projection.MenuItemSummaryProjection;
 import com.kritik.POS.restaurant.util.ProductImageUrlUtil;
-import com.kritik.POS.tax.dto.TaxRateResponseDto;
-import com.kritik.POS.tax.projection.TaxRateSummaryProjection;
+import com.kritik.POS.tax.util.MoneyUtils;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -14,9 +13,12 @@ public class RestaurantDtoMapper {
 
 
     public MenuItemResponseDto toMenuItemDto(MenuItemSummaryProjection projection) {
-        Double discountedPrice = projection.getPrice();
+        java.math.BigDecimal discountedPrice = projection.getPrice();
         if (projection.getPrice() != null && projection.getDiscount() != null) {
-            discountedPrice = projection.getPrice() - ((projection.getPrice() * projection.getDiscount()) / 100.0);
+            discountedPrice = MoneyUtils.subtract(
+                    projection.getPrice(),
+                    MoneyUtils.percentOf(projection.getPrice(), projection.getDiscount())
+            );
         }
         return new MenuItemResponseDto(
                 projection.getId(),
@@ -28,9 +30,12 @@ public class RestaurantDtoMapper {
                 projection.getPrice(),
                 projection.getDiscount(),
                 discountedPrice,
+                projection.getPriceIncludesTax(),
+                projection.getTaxClassId(),
                 projection.getIsAvailable(),
                 projection.getIsActive(),
                 projection.getIsTrending(),
+                projection.getMenuType(),
                 projection.getRecipeBased(),
                 projection.getBatchSize(),
                 projection.getTotalStock(),
@@ -55,19 +60,6 @@ public class RestaurantDtoMapper {
                 projection.getRestaurantId(),
                 projection.getCategoryName(),
                 projection.getCategoryDescription(),
-                projection.getIsActive(),
-                projection.getCreatedAt(),
-                projection.getUpdatedAt()
-        );
-    }
-
-
-    public TaxRateResponseDto toTaxDto(TaxRateSummaryProjection projection) {
-        return new TaxRateResponseDto(
-                projection.getTaxId(),
-                projection.getRestaurantId(),
-                projection.getTaxName(),
-                projection.getTaxAmount(),
                 projection.getIsActive(),
                 projection.getCreatedAt(),
                 projection.getUpdatedAt()

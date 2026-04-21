@@ -41,6 +41,8 @@ public class SecurityConfig {
                                 "/auth/**",
                                 "/test/**",
                                 FileRoute.UPLOADS_RESOURCE_PATTERN,
+                                "/docs",
+                                "/docs/**",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**"

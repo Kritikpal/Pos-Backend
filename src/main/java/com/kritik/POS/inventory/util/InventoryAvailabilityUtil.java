@@ -4,6 +4,7 @@ import com.kritik.POS.inventory.entity.enums.MenuStockStrategy;
 import com.kritik.POS.inventory.entity.stock.IngredientStock;
 import com.kritik.POS.inventory.entity.stock.PreparedItemStock;
 import com.kritik.POS.restaurant.entity.MenuItem;
+import com.kritik.POS.restaurant.entity.enums.MenuType;
 import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
 import com.kritik.POS.restaurant.models.request.StockRequest;
 
@@ -14,18 +15,24 @@ public class InventoryAvailabilityUtil {
 
 
     public static boolean hasRecipe(MenuItem menuItem) {
-        return menuItem != null
-                && menuItem.getHasRecipe() != null
-                && menuItem.getHasRecipe();
+        MenuType menuType = resolveMenuType(menuItem);
+        return menuType == MenuType.RECIPE || menuType == MenuType.PREPARED;
+    }
+
+    public static MenuType resolveMenuType(MenuItem menuItem) {
+        if (menuItem == null) {
+            return MenuType.DIRECT;
+        }
+        return menuItem.getMenuType() == null ? MenuType.DIRECT : menuItem.getMenuType();
     }
 
     public static MenuStockStrategy resolveStockStrategy(MenuItem menuItem) {
-        if (!hasRecipe(menuItem)) {
-            return MenuStockStrategy.DIRECT;
-        }
-        return Boolean.TRUE.equals(menuItem.getIsPrepared())
-                ? MenuStockStrategy.PREPARED
-                : MenuStockStrategy.RECIPE;
+        return switch (resolveMenuType(menuItem)) {
+            case DIRECT -> MenuStockStrategy.DIRECT;
+            case RECIPE -> MenuStockStrategy.RECIPE;
+            case PREPARED -> MenuStockStrategy.PREPARED;
+            case CONFIGURABLE -> MenuStockStrategy.CONFIGURABLE;
+        };
     }
 
     public static Integer computeAvailableServings(MenuItem menuItem) {
@@ -36,6 +43,7 @@ public class InventoryAvailabilityUtil {
             case DIRECT -> menuItem.getItemStock() == null ? null : menuItem.getItemStock().getTotalStock();
             case PREPARED -> computePreparedAvailableServings(menuItem);
             case RECIPE -> computeRecipeAvailableServings(menuItem);
+            case CONFIGURABLE -> null;
         };
     }
 
@@ -92,6 +100,7 @@ public class InventoryAvailabilityUtil {
                 Integer availableServings = computeAvailableServings(menuItem);
                 yield availableServings != null && availableServings > 0;
             }
+            case CONFIGURABLE -> Boolean.TRUE.equals(menuItem.getIsAvailable());
         };
     }
 
@@ -105,6 +114,7 @@ public class InventoryAvailabilityUtil {
                     && menuItem.getItemStock().getReorderLevel() != null
                     && menuItem.getItemStock().getTotalStock() <= menuItem.getItemStock().getReorderLevel();
             case PREPARED, RECIPE -> isRecipeLowStock(menuItem);
+            case CONFIGURABLE -> false;
         };
     }
 
@@ -150,6 +160,7 @@ public class InventoryAvailabilityUtil {
             case DIRECT -> menuItem.getItemStock() == null ? null : menuItem.getItemStock().getUnitOfMeasure();
             case PREPARED -> menuItem.getPreparedItemStock() == null ? "serving" : menuItem.getPreparedItemStock().getUnitCode();
             case RECIPE -> "serving";
+            case CONFIGURABLE -> null;
         };
     }
 
@@ -178,6 +189,9 @@ public class InventoryAvailabilityUtil {
                 }
             }
             case PREPARED -> preparedRequirements.merge(menuItem.getId(), amount.doubleValue(), Double::sum);
+            case CONFIGURABLE -> {
+                // Configurable parent items do not own stock; selected child items drive deduction.
+            }
         }
     }
 

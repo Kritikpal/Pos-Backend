@@ -1,5 +1,8 @@
 package com.kritik.POS.restaurant.dto;
 
+import com.kritik.POS.restaurant.entity.enums.MenuType;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public record MenuItemResponseDto(
@@ -9,12 +12,15 @@ public record MenuItemResponseDto(
         String productImage,
         String itemName,
         String description,
-        Double price,
-        Double discount,
-        Double discountedPrice,
+        BigDecimal price,
+        BigDecimal discount,
+        BigDecimal discountedPrice,
+        Boolean priceIncludesTax,
+        Long taxClassId,
         Boolean isAvailable,
         Boolean isActive,
         Boolean isTrending,
+        MenuType menuType,
         Boolean recipeBased,
         Integer batchSize,
         Integer totalStock,

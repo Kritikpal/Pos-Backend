@@ -53,6 +53,7 @@ public interface IngredientStockRepository extends JpaRepository<IngredientStock
             select
             i.sku AS sku,
             i.ingredientName AS ingredientName,
+            i.category as category,
             i.totalStock AS totalStock,
             i.reorderLevel AS reorderLevel,
             i.unitOfMeasure AS unitOfMeasure,
@@ -74,8 +75,8 @@ public interface IngredientStockRepository extends JpaRepository<IngredientStock
                   or lower(coalesce(sup.supplierName, '')) like lower(concat('%', :search, '%'))
               )
             order by
-                case when i.totalStock <= i.reorderLevel then 0 else 1 end asc,
-                i.totalStock asc,
+                case when i.totalStock < i.reorderLevel then 0 else 1 end asc,
+                i.updatedAt desc,
                 i.ingredientName asc
             """)
     Page<IngredientStockListProjection> findVisibleIngredientsV2(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
@@ -89,6 +90,9 @@ public interface IngredientStockRepository extends JpaRepository<IngredientStock
 
     @EntityGraph(attributePaths = {"supplier"})
     List<IngredientStock> findAllBySkuInAndIsDeletedFalse(Collection<String> skus);
+
+    @EntityGraph(attributePaths = {"supplier"})
+    List<IngredientStock> findAllBySkuIn(Collection<String> skus);
 
     @EntityGraph(attributePaths = {"supplier"})
     List<IngredientStock> findAllByRestaurantIdAndIsDeletedFalse(Long restaurantId);

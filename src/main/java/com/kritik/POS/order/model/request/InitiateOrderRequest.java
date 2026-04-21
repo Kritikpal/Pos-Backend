@@ -17,6 +17,8 @@ public class InitiateOrderRequest {
 
     private PaymentType paymentType;
 
+    private OrderTaxContextRequest taxContext;
+
     public record OrderItemRequest(@NotNull Long menuItemId, @NotNull Integer amount) {
     }
 }

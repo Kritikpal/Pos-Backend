@@ -10,6 +10,7 @@ public class RestaurantRoute {
     public static final String GET_MENU_ITEMS_PAGE = "/api/restaurants/menu-items";
     public static final String GET_MENU_ITEM = "/getMenuItem/{id}";
     public static final String EDIT_ADD_MENU_ITEM = "/menuEdit";
+    public static final String UPDATE_MENU_ITEM = "/updateMenuEdit";
     public static final String DELETE_MENU_ITEM = "/deleteMenuItem/{id}";
     public static final String DELETE_ALL_MENU_ITEMS = "/deleteAllMenuItems";
 

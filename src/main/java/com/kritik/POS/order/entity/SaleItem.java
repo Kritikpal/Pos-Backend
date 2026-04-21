@@ -4,6 +4,7 @@ import com.kritik.POS.restaurant.entity.MenuItem;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
@@ -20,7 +21,43 @@ public class SaleItem {
     private String saleItemName;
 
     @Column(nullable = false, updatable = false)
-    private Double saleItemPrice;
+    private BigDecimal saleItemPrice;
+
+    @Column(name = "tax_class_code_snapshot", nullable = false, updatable = false)
+    private String taxClassCodeSnapshot;
+
+    @Column(name = "price_includes_tax", nullable = false, updatable = false)
+    private boolean priceIncludesTax = false;
+
+    @Column(name = "unit_list_amount", nullable = false, updatable = false, precision = 19, scale = 2)
+    private BigDecimal unitListAmount;
+
+    @Column(name = "unit_discount_amount", nullable = false, updatable = false, precision = 19, scale = 2)
+    private BigDecimal unitDiscountAmount;
+
+    @Column(name = "unit_taxable_amount", nullable = false, updatable = false, precision = 19, scale = 2)
+    private BigDecimal unitTaxableAmount;
+
+    @Column(name = "unit_tax_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal unitTaxAmount;
+
+    @Column(name = "unit_total_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal unitTotalAmount;
+
+    @Column(name = "line_subtotal_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal lineSubtotalAmount;
+
+    @Column(name = "line_discount_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal lineDiscountAmount;
+
+    @Column(name = "line_taxable_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal lineTaxableAmount;
+
+    @Column(name = "line_tax_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal lineTaxAmount;
+
+    @Column(name = "line_total_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal lineTotalAmount;
 
     @Column(nullable = false,updatable = false)
     private Integer amount;

@@ -6,7 +6,6 @@ import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.exception.errors.OrderException;
 import com.kritik.POS.inventory.util.InventoryUtil;
 import com.kritik.POS.order.entity.Order;
-import com.kritik.POS.order.entity.OrderTax;
 import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
@@ -14,23 +13,26 @@ import com.kritik.POS.order.model.request.CompletePaymentRequest;
 import com.kritik.POS.order.model.request.InitiateOrderRequest;
 import com.kritik.POS.order.model.request.RefundPaymentRequest;
 import com.kritik.POS.order.model.response.PaymentProcessingResponse;
+import com.kritik.POS.order.service.OrderPricingService;
 import com.kritik.POS.order.repository.OrderRepository;
 import com.kritik.POS.order.service.OrderService;
-import com.kritik.POS.order.util.OrderUtil;
 import com.kritik.POS.restaurant.entity.MenuItem;
 import com.kritik.POS.restaurant.models.request.StockRequest;
 import com.kritik.POS.inventory.util.InventoryAvailabilityUtil;
 import com.kritik.POS.restaurant.util.RestaurantUtil;
 import com.kritik.POS.security.models.SecurityUser;
 import com.kritik.POS.security.service.TenantAccessService;
-import com.kritik.POS.tax.entity.TaxRate;
+import com.kritik.POS.tax.entity.TaxClass;
+import com.kritik.POS.tax.model.TaxableChargeComponent;
 import com.kritik.POS.tax.service.TaxService;
+import com.kritik.POS.tax.util.MoneyUtils;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -45,6 +47,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final InventoryService inventoryService;
     private final TaxService taxService;
+    private final OrderPricingService orderPricingService;
     private final ApplicationEventPublisher eventPublisher;
     private final TenantAccessService tenantAccessService;
 
@@ -170,16 +173,18 @@ public class OrderServiceImpl implements OrderService {
         List<StockRequest> stockRequestList = new ArrayList<>();
         Map<String, Double> ingredientRequirements = new HashMap<>();
         Map<Long, Double> preparedRequirements = new HashMap<>();
+        List<OrderPricingService.LinePricingPlan> linePlans = new ArrayList<>();
         Long orderRestaurantId = null;
+        int lineIndex = 0;
 
         for (InitiateOrderRequest.OrderItemRequest orderItemRequest : initiateOrderRequest.getOrderItems()) {
             MenuItem menuItem = inventoryService.getAccessibleMenuItem(orderItemRequest.menuItemId());
             orderRestaurantId = validateRestaurant(order, orderRestaurantId, menuItem);
+            TaxClass taxClass = taxService.resolveTaxClass(menuItem.getRestaurantId(), menuItem.getTaxClassId());
 
             SaleItem saleItem = new SaleItem();
             saleItem.setAmount(orderItemRequest.amount());
             saleItem.setSaleItemName(menuItem.getItemName());
-            saleItem.setSaleItemPrice(RestaurantUtil.getMenuItemPrice(menuItem.getItemPrice()));
             saleItem.setMenuItem(menuItem);
             saleItem.setRestaurantId(menuItem.getRestaurantId());
             InventoryAvailabilityUtil.accumulateStockRequirements(
@@ -191,18 +196,40 @@ public class OrderServiceImpl implements OrderService {
             );
             saleItem.setOrder(order);
             saleItemList.add(saleItem);
+
+            BigDecimal quantity = BigDecimal.valueOf(orderItemRequest.amount());
+            BigDecimal unitListAmount = MoneyUtils.money(menuItem.getItemPrice().getPrice());
+            BigDecimal unitDiscountedAmount = RestaurantUtil.getMenuItemPrice(menuItem.getItemPrice());
+            BigDecimal unitDiscountAmount = MoneyUtils.subtract(unitListAmount, unitDiscountedAmount);
+            BigDecimal lineSubtotalAmount = MoneyUtils.multiply(unitListAmount, quantity);
+            BigDecimal lineDiscountAmount = MoneyUtils.multiply(unitDiscountAmount, quantity);
+            String referenceKey = "sale-" + lineIndex++;
+            linePlans.add(OrderPricingService.LinePricingPlan.forSaleItem(
+                    referenceKey,
+                    taxClass.getCode(),
+                    Boolean.TRUE.equals(menuItem.getItemPrice().getPriceIncludesTax()),
+                    unitListAmount,
+                    unitDiscountAmount,
+                    lineSubtotalAmount,
+                    lineDiscountAmount,
+                    List.of(new TaxableChargeComponent(
+                            referenceKey,
+                            taxClass.getCode(),
+                            taxClass.getId(),
+                            MoneyUtils.multiply(unitDiscountedAmount, quantity),
+                            Boolean.TRUE.equals(menuItem.getItemPrice().getPriceIncludesTax())
+                    )),
+                    saleItem
+            ));
         }
 
         inventoryService.checkOrderStockAvailability(stockRequestList, ingredientRequirements, preparedRequirements);
         replaceOrderItems(order, saleItemList);
         order.setRestaurantId(orderRestaurantId);
-        replaceOrderTaxes(order, buildOrderTaxes(order, orderRestaurantId));
-
-        Double totalPrice = OrderUtil.getTotalPrice(order);
-        if (totalPrice <= 0) {
+        orderPricingService.applyPricing(order, orderRestaurantId, linePlans, initiateOrderRequest.getTaxContext());
+        if (order.getGrandTotal().compareTo(BigDecimal.ZERO) <= 0) {
             throw new AppException("Unable to calculate the price", HttpStatus.INTERNAL_SERVER_ERROR);
         }
-        order.setTotalPrice(totalPrice);
     }
 
     private Long validateRestaurant(Order order, Long orderRestaurantId, MenuItem menuItem) {
@@ -218,26 +245,6 @@ public class OrderServiceImpl implements OrderService {
         return orderRestaurantId;
     }
 
-    private List<OrderTax> buildOrderTaxes(Order order, Long orderRestaurantId) {
-        List<TaxRate> allActiveTaxs = taxService.getActiveTaxRates();
-        if (allActiveTaxs == null || allActiveTaxs.isEmpty()) {
-            return new ArrayList<>();
-        }
-
-        List<OrderTax> orderTaxes = new ArrayList<>();
-        for (TaxRate activeTax : allActiveTaxs) {
-            if (orderRestaurantId != null && !orderRestaurantId.equals(activeTax.getRestaurantId())) {
-                continue;
-            }
-            OrderTax orderTax = new OrderTax();
-            orderTax.setOrder(order);
-            orderTax.setTaxAmount(activeTax.getTaxAmount());
-            orderTax.setTaxName(activeTax.getTaxName());
-            orderTaxes.add(orderTax);
-        }
-        return orderTaxes;
-    }
-
     private PaymentType resolvePaymentType(PaymentType requestedPaymentType, PaymentType fallbackPaymentType) {
         return requestedPaymentType == null ? fallbackPaymentType : requestedPaymentType;
     }
@@ -250,16 +257,6 @@ public class OrderServiceImpl implements OrderService {
         }
         managedItems.clear();
         managedItems.addAll(saleItemList);
-    }
-
-    private void replaceOrderTaxes(Order order, List<OrderTax> orderTaxes) {
-        List<OrderTax> managedTaxes = order.getOrderTaxes();
-        if (managedTaxes == null) {
-            managedTaxes = new ArrayList<>();
-            order.setOrderTaxes(managedTaxes);
-        }
-        managedTaxes.clear();
-        managedTaxes.addAll(orderTaxes);
     }
 
     private void validateCurrentOrderStock(Order order) {

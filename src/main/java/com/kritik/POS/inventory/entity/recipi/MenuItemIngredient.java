@@ -2,20 +2,10 @@ package com.kritik.POS.inventory.entity.recipi;
 
 import com.kritik.POS.inventory.entity.stock.IngredientStock;
 import com.kritik.POS.restaurant.entity.MenuItem;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Index;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 
@@ -35,14 +25,20 @@ public class MenuItemIngredient {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "menu_item_id", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private MenuItem menuItem;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recipe_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private MenuRecipe recipe;
 
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "ingredient_sku", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private IngredientStock ingredientStock;
 
     @Column(name = "quantity_required", nullable = false)
@@ -66,4 +62,6 @@ public class MenuItemIngredient {
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+
 }

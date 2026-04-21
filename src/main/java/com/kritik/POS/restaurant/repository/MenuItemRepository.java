@@ -1,6 +1,8 @@
 package com.kritik.POS.restaurant.repository;
 
+import com.kritik.POS.inventory.projection.RecipeMenuItemSearchProjection;
 import com.kritik.POS.restaurant.entity.MenuItem;
+import com.kritik.POS.restaurant.entity.enums.MenuType;
 import com.kritik.POS.restaurant.projection.MenuItemSummaryProjection;
 import com.kritik.POS.restaurant.projection.UserDashboardMenuItemProjection;
 import org.springframework.data.domain.Page;
@@ -63,13 +65,23 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                    m.description as description,
                    ip.price as price,
                    ip.disCount as discount,
+                   ip.priceIncludesTax as priceIncludesTax,
+                   m.taxClassId as taxClassId,
                    m.isAvailable as isAvailable,
                    m.isActive as isActive,
                    m.isTrending as isTrending,
-                   coalesce(m.hasRecipe, false) as recipeBased,
+                   m.menuType as menuType,
+                   case
+                       when m.menuType in (
+                           com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE,
+                           com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED
+                       ) then true
+                       else false
+                   end as recipeBased,
                    recipe.batchSize as batchSize,
                    case
-                       when coalesce(m.isPrepared, false) = true then coalesce(
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.CONFIGURABLE then null
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED then coalesce(
                            (
                                select floor(
                                    case
@@ -83,7 +95,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                            ),
                            0
                        )
-                       when coalesce(m.hasRecipe, false) = true then coalesce(
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE then coalesce(
                            (
                                select min(
                                    case
@@ -107,12 +119,14 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                        else s.totalStock
                    end as totalStock,
                    case
-                       when coalesce(m.isPrepared, false) = true then null
-                       when coalesce(m.hasRecipe, false) = true then null
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.CONFIGURABLE then null
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED then null
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE then null
                        else s.reorderLevel
                    end as reorderLevel,
                    case
-                       when coalesce(m.isPrepared, false) = true then coalesce(
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.CONFIGURABLE then null
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED then coalesce(
                            (
                                select pi.unitCode
                                from PreparedItemStock pi
@@ -120,17 +134,19 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                            ),
                            'serving'
                        )
-                       when coalesce(m.hasRecipe, false) = true then 'serving'
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE then 'serving'
                        else s.unitOfMeasure
                    end as unitOfMeasure,
                    case
-                       when coalesce(m.isPrepared, false) = true then null
-                       when coalesce(m.hasRecipe, false) = true then null
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.CONFIGURABLE then null
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED then null
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE then null
                        else sup.supplierId
                    end as supplierId,
                    case
-                       when coalesce(m.isPrepared, false) = true then null
-                       when coalesce(m.hasRecipe, false) = true then null
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.CONFIGURABLE then null
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED then null
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE then null
                        else sup.supplierName
                    end as supplierName,
                    c.categoryId as categoryId,
@@ -161,6 +177,34 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                                                           @Param("search") String search,
                                                           Pageable pageable);
 
+    @Query("""
+        select m.id as id,
+               m.itemName as itemName,
+               pf.url as productImage,
+               rc.id as recipeId
+        from MenuItem m
+        left join m.productImage pf
+        left join m.recipe as rc
+        where m.isDeleted = false
+          and (:skipRestaurantFilter = true or m.restaurantId in :restaurantIds)
+          and (
+              :types is null
+              or m.menuType in :types
+          )
+          and (
+              coalesce(:search, '') = ''
+              or lower(m.itemName) like lower(concat('%', :search, '%'))
+          )
+        order by m.itemName asc
+        """)
+    List<RecipeMenuItemSearchProjection> searchRecipeMenuItems(
+            @Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+            @Param("restaurantIds") Collection<Long> restaurantIds,
+            @Param("types") Collection<MenuType> types,
+            @Param("search") String search,
+            Pageable pageable
+    );
+
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""
             update MenuItem m
@@ -190,7 +234,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
             where m.id in :menuIds
               and m.isActive = true
               and m.isDeleted = false
-              and coalesce(m.isPrepared, false) = true
+              and m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED
               and exists (
                   select ps.menuItemId
                   from PreparedItemStock ps
@@ -234,7 +278,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
             """, nativeQuery = true)
     int refreshRecipeAvailabilityByIds(@Param("menuIds") Collection<Long> menuIds);
 
-    @Query(
+        @Query(
             value = """
                     select m.id as id,
                            pf.url as productImage,
@@ -244,8 +288,10 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                            ip.price as itemPrice,
                            m.isAvailable as isAvailable,
                            m.isTrending as isTrending,
+                           m.menuType as menuType,
                            CASE
-                           WHEN m.isPrepared = true THEN COALESCE(
+                           WHEN m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.CONFIGURABLE THEN NULL
+                           WHEN m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED THEN COALESCE(
                             (select
                                 case
                                     when pi.active = false then 0
@@ -254,7 +300,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                                 end
                              from PreparedItemStock pi
                              where pi.menuItemId = m.id),0)
-                            WHEN m.hasRecipe = true THEN COALESCE(
+                            WHEN m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE THEN COALESCE(
                             (
                                 SELECT MIN(
                                     CASE

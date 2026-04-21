@@ -2,15 +2,22 @@ package com.kritik.POS.inventory.controller;
 
 import com.kritik.POS.common.model.ApiResponse;
 import com.kritik.POS.common.model.PageResponse;
+import com.kritik.POS.inventory.models.request.IngredientImportCommitRequest;
 import com.kritik.POS.inventory.models.request.ItemStockUpsertRequest;
+import com.kritik.POS.inventory.models.request.PreparedStockUpdateRequest;
 import com.kritik.POS.inventory.models.request.ProductionEntryCreateRequest;
+import com.kritik.POS.inventory.models.response.IngredientImportCommitResponse;
+import com.kritik.POS.inventory.models.response.IngredientImportPreviewResponse;
 import com.kritik.POS.inventory.models.response.MenuItemIngredientDto;
+import com.kritik.POS.inventory.models.response.PreparedStockResponseDto;
 import com.kritik.POS.inventory.models.response.ProductionEntryResponseDto;
 import com.kritik.POS.inventory.models.response.ProductionEntrySummaryDto;
 import com.kritik.POS.inventory.projection.IngredientStockListProjection;
 import com.kritik.POS.inventory.route.InventoryRoute;
+import com.kritik.POS.inventory.service.IngredientImportService;
 import com.kritik.POS.inventory.service.IngredientService;
 import com.kritik.POS.inventory.service.InventoryService;
+import com.kritik.POS.inventory.service.PreparedStockService;
 import com.kritik.POS.inventory.models.response.StockResponseDto;
 import com.kritik.POS.inventory.models.response.SupplierResponseDto;
 import com.kritik.POS.inventory.service.ProductionEntryService;
@@ -26,6 +33,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -34,9 +42,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -49,7 +59,9 @@ public class InventoryController {
     private final InventoryService inventoryService;
     private final SupplierService supplierService;
     private final IngredientService ingredientService;
+    private final IngredientImportService ingredientImportService;
     private final ProductionEntryService productionEntryService;
+    private final PreparedStockService preparedStockService;
 
     @Tag(name = SwaggerTags.STOCK)
     @GetMapping(InventoryRoute.GET_STOCKS_PAGE)
@@ -67,16 +79,6 @@ public class InventoryController {
         ));
     }
 
-    @Tag(name = SwaggerTags.INGREDIENT)
-    @GetMapping(InventoryRoute.MENU_INGREDIENT_MAPPING)
-    public ResponseEntity<ApiResponse<List<MenuItemIngredientDto>>> menuIngredients(
-            @RequestParam(required = false) Long chainId,
-            @RequestParam(required = false) Long restaurantId
-    ) {
-        return ResponseEntity.ok(ApiResponse.SUCCESS(
-                inventoryService.getIngredientMenuMapping(chainId, restaurantId)
-        ));
-    }
 
 
     @Tag(name = SwaggerTags.STOCK)
@@ -103,6 +105,38 @@ public class InventoryController {
         return ResponseEntity.ok(ApiResponse.SUCCESS(
                 inventoryService.updateStock(sku, stockUpdateRequest),
                 "Stock updated successfully"
+        ));
+    }
+
+    @Tag(name = SwaggerTags.PREPARED_STOCK)
+    @GetMapping(InventoryRoute.GET_PREPARED_STOCKS_PAGE)
+    public ResponseEntity<ApiResponse<PageResponse<PreparedStockResponseDto>>> preparedStockPage(
+            @RequestParam(required = false) Long chainId,
+            @RequestParam(required = false) Long restaurantId,
+            @RequestParam(required = false, defaultValue = "") String search,
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "page must be 0 or greater") Integer page,
+            @RequestParam(defaultValue = "20") @Min(value = 1, message = "size must be at least 1") Integer size
+    ) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                preparedStockService.getPreparedStockPage(chainId, restaurantId, search, page, size)
+        ));
+    }
+
+    @Tag(name = SwaggerTags.PREPARED_STOCK)
+    @GetMapping(InventoryRoute.GET_PREPARED_STOCK)
+    public ResponseEntity<ApiResponse<PreparedStockResponseDto>> getPreparedStock(@PathVariable Long menuItemId) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(preparedStockService.getPreparedStock(menuItemId)));
+    }
+
+    @Tag(name = SwaggerTags.PREPARED_STOCK)
+    @PutMapping(InventoryRoute.UPDATE_PREPARED_STOCK)
+    public ResponseEntity<ApiResponse<PreparedStockResponseDto>> updatePreparedStock(
+            @PathVariable Long menuItemId,
+            @RequestBody @Valid PreparedStockUpdateRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                preparedStockService.updatePreparedStock(menuItemId, request),
+                "Prepared stock updated successfully"
         ));
     }
 
@@ -151,6 +185,30 @@ public class InventoryController {
         return ResponseEntity.ok(ApiResponse.SUCCESS(
                 ingredientService.saveIngredient(ingredientRequest),
                 "Ingredient saved successfully"
+        ));
+    }
+
+    @Tag(name = SwaggerTags.INGREDIENT)
+    @PostMapping(value = InventoryRoute.PREVIEW_INGREDIENT_IMPORT, consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<IngredientImportPreviewResponse>> previewIngredientImport(
+            @RequestPart("file") MultipartFile file,
+            @RequestParam Long restaurantId,
+            @RequestParam(required = false, defaultValue = "false") Boolean overwriteNulls
+    ) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                ingredientImportService.previewImport(file, restaurantId, overwriteNulls),
+                "Ingredient import preview generated successfully"
+        ));
+    }
+
+    @Tag(name = SwaggerTags.INGREDIENT)
+    @PostMapping(InventoryRoute.COMMIT_INGREDIENT_IMPORT)
+    public ResponseEntity<ApiResponse<IngredientImportCommitResponse>> commitIngredientImport(
+            @RequestBody @Valid IngredientImportCommitRequest request
+    ) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                ingredientImportService.commitImport(request.previewToken()),
+                "Ingredient import committed successfully"
         ));
     }
 
@@ -232,6 +290,22 @@ public class InventoryController {
     @GetMapping(InventoryRoute.GET_PRODUCTION_ENTRY)
     public ResponseEntity<ApiResponse<ProductionEntryResponseDto>> getProductionEntry(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.SUCCESS(productionEntryService.getProductionEntry(id)));
+    }
+
+
+    @Tag(name = SwaggerTags.PREPARED_STOCK)
+    @GetMapping(InventoryRoute.GET_COOKED_MENUS)
+    public ResponseEntity<ApiResponse<PageResponse<PreparedStockResponseDto>>>
+    getCookedMenus(
+            @RequestParam(required = false) Long chainId,
+            @RequestParam(required = false) Long restaurantId,
+            @RequestParam(name = "search", defaultValue = "") String searchString,
+            @RequestParam(defaultValue = "0") @Min(value = 0, message = "pageNumber must be at least 0") Integer pageNumber,
+            @RequestParam(defaultValue = "10") @Min(value = 1, message = "pageSize must be at least 1") Integer pageSize
+    ) {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(
+                preparedStockService.getPreparedStockPage(chainId, restaurantId, searchString, pageNumber, pageSize)
+        ));
     }
 
     @Tag(name = SwaggerTags.PRODUCTION_ENTRY)

@@ -5,10 +5,14 @@ public class SwaggerTags {
     public static final String TABLE = "table";
     public static final String MENU_ITEM = "menu-item";
     public static final String STOCK = "stock";
+    public static final String PREPARED_STOCK = "prepared-stock";
     public static final String INGREDIENT = "ingredient";
     public static final String SUPPLIER = "supplier";
     public static final String STOCK_RECEIPT = "stock-receipt";
     public static final String PRODUCTION_ENTRY = "production-entry";
+    public static final String CONFIGURED_MENU = "configured-menu";
+    public static final String CONFIGURED_ORDER = "configured-order";
+    public static final String ORDER_V2 = "order-v2";
     public static final String AUTH = "auth";
     public static final String USER = "user";
     public static final String ORDER = "order";

@@ -4,6 +4,8 @@ import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
 import java.time.LocalDateTime;
+import java.math.BigDecimal;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
@@ -16,7 +18,14 @@ public class PaymentProcessingResponse {
     private String description;
     private PaymentType paymentType;
     private PaymentStatus paymentStatus;
-    private Double totalPrice;
+    private BigDecimal totalPrice;
+    private BigDecimal subtotalAmount;
+    private BigDecimal discountAmount;
+    private BigDecimal taxableAmount;
+    private BigDecimal taxAmount;
+    private BigDecimal feeAmount;
+    private BigDecimal roundingAmount;
+    private BigDecimal grandTotal;
     private LocalDateTime paymentCompletedAt;
     private LocalDateTime cancelledAt;
     private LocalDateTime refundedAt;
@@ -28,6 +37,7 @@ public class PaymentProcessingResponse {
     private Long refundOperatorUserId;
     private String refundReason;
     private String refundNotes;
+    private List<OrderTaxSummaryResponse> taxSummaries;
 
     public PaymentProcessingResponse(Order order, String message, String description) {
         this.message = message;
@@ -36,6 +46,13 @@ public class PaymentProcessingResponse {
         this.paymentType = order.getPaymentType();
         this.paymentStatus = order.getPaymentStatus();
         this.totalPrice = order.getTotalPrice();
+        this.subtotalAmount = order.getSubtotalAmount();
+        this.discountAmount = order.getDiscountAmount();
+        this.taxableAmount = order.getTaxableAmount();
+        this.taxAmount = order.getTaxAmount();
+        this.feeAmount = order.getFeeAmount();
+        this.roundingAmount = order.getRoundingAmount();
+        this.grandTotal = order.getGrandTotal();
         this.paymentCompletedAt = order.getPaymentCompletedAt();
         this.cancelledAt = order.getCancelledAt();
         this.refundedAt = order.getRefundedAt();
@@ -47,6 +64,7 @@ public class PaymentProcessingResponse {
         this.refundOperatorUserId = order.getRefundOperatorUserId();
         this.refundReason = order.getRefundReason();
         this.refundNotes = order.getRefundNotes();
+        this.taxSummaries = order.getOrderTaxSummaries().stream().map(OrderTaxSummaryResponse::fromEntity).toList();
     }
 
 

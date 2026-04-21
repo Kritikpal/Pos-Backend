@@ -3,6 +3,7 @@ package com.kritik.POS.common.service.impl;
 import com.kritik.POS.common.service.CsvService;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.restaurant.entity.Category;
+import com.kritik.POS.restaurant.entity.enums.MenuType;
 import com.kritik.POS.restaurant.models.request.CategoryRequest;
 import com.kritik.POS.restaurant.models.request.ItemRequest;
 import com.kritik.POS.restaurant.models.request.TableRequest;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +47,7 @@ public class CsvServiceImpl implements CsvService {
                 if (line.length > 1) {
                     String name = line[0];
                     String description = line[1];
-                    double itemPrice = Double.parseDouble(line[2]);
+                    BigDecimal itemPrice = BigDecimal.valueOf(Double.parseDouble(line[2]));
                     String categoryName = line[3].trim();
 
                     Category category = categoryRepository.findByCategoryName(categoryName)
@@ -57,11 +59,16 @@ public class CsvServiceImpl implements CsvService {
                         category = categoryRepository.save(category);
                     }
 
-                    double discount = 0.0;
+                    BigDecimal discount = BigDecimal.ZERO;
                     itemRequests.add(new ItemRequest(
                             null, name, description, itemPrice,
                             category.getCategoryId(), discount,
-                            true, false, false, false,null, null
+                            true,
+                            false,
+                            false,
+                            MenuType.DIRECT,
+                            false,
+                            null
                     ));
                 }
             }

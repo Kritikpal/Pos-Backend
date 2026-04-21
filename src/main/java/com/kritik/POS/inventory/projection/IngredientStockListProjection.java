@@ -8,6 +8,8 @@ public interface IngredientStockListProjection {
 
     String getIngredientName();
 
+    String getCategory();
+
     Double getTotalStock();
 
     Double getReorderLevel();

@@ -20,6 +20,7 @@ spring:
       mail.smtp.starttls.enable: true
 
 app:
+  gpt-api-key: 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
   jwt:
     secret: ${JWT_SECRET:change-this-secret-key-to-at-least-32-characters}
     issuer: pos-backend
@@ -30,11 +31,23 @@ app:
   superadmin:
     email: yourgmail@gmail.com
     password: Your@123
-  login-url: http://localhost:8080/login
+  login-url: http://localhost:3000/login
+
 
 springdoc:
   swagger-ui:
-    path: /swagger-ui.html
+    path: /docs
+    operations-sorter: alpha
+    tags-sorter: alpha
+    doc-expansion: none
+    display-request-duration: true
+    try-it-out-enabled: true
+    filter: true
+    deep-linking: true
+    default-models-expand-depth: -1
+    syntax-highlight:
+      activated: true
+      theme: obsidian
 
 server:
   port: 8082

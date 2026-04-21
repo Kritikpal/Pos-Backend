@@ -7,10 +7,12 @@ import com.kritik.POS.restaurant.dto.MenuItemResponseDto;
 import com.kritik.POS.restaurant.entity.RestaurantTable;
 import com.kritik.POS.restaurant.models.request.CategoryRequest;
 import com.kritik.POS.restaurant.models.request.ItemRequest;
+import com.kritik.POS.restaurant.models.request.MenuUpdateRequest;
 import com.kritik.POS.restaurant.models.request.TableRequest;
 import com.kritik.POS.restaurant.models.response.CategoryResponse;
 import com.kritik.POS.restaurant.models.response.MenuResponse;
 import com.kritik.POS.restaurant.models.response.UserDashboard;
+import jakarta.validation.Valid;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -35,4 +37,6 @@ public interface RestaurantService {
     CategoryResponse getCategoryById(Long categoryId) throws AppException;
     CategoryResponse addEditCategory(CategoryRequest categoryRequest) throws AppException;
     boolean deleteCategory(Long categoryId) throws AppException;
+
+    MenuResponse updateMenu(@Valid MenuUpdateRequest updateRequest, MultipartFile productImage);
 }

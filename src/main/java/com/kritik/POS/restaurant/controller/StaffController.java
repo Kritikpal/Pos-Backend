@@ -7,6 +7,7 @@ import com.kritik.POS.restaurant.dto.MenuItemResponseDto;
 import com.kritik.POS.restaurant.entity.RestaurantTable;
 import com.kritik.POS.restaurant.models.request.CategoryRequest;
 import com.kritik.POS.restaurant.models.request.ItemRequest;
+import com.kritik.POS.restaurant.models.request.MenuUpdateRequest;
 import com.kritik.POS.restaurant.models.request.TableRequest;
 import com.kritik.POS.restaurant.models.response.CategoryResponse;
 import com.kritik.POS.restaurant.models.response.MenuResponse;
@@ -66,6 +67,19 @@ public class StaffController {
             @RequestPart(value = "productImage", required = false) MultipartFile productImage
     ) {
         MenuResponse savedMenuItem = restaurantService.addEditMenuItem(itemRequest, productImage);
+        return ResponseEntity.ok(ApiResponse.SUCCESS(savedMenuItem));
+    }
+
+    @Tag(name = SwaggerTags.MENU_ITEM)
+    @PostMapping(
+            value = RestaurantRoute.UPDATE_MENU_ITEM,
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<ApiResponse<MenuResponse>> updateMenuItem(
+            @RequestPart("itemRequest") @Valid MenuUpdateRequest updateRequest,
+            @RequestPart(value = "productImage", required = false) MultipartFile productImage
+    ) {
+        MenuResponse savedMenuItem = restaurantService.updateMenu(updateRequest, productImage);
         return ResponseEntity.ok(ApiResponse.SUCCESS(savedMenuItem));
     }
 

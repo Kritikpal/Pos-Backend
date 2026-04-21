@@ -1,6 +1,7 @@
 package com.kritik.POS.restaurant.models.response;
 
 import com.kritik.POS.restaurant.projection.UserDashboardMenuItemProjection;
+import com.kritik.POS.restaurant.entity.enums.MenuType;
 import com.kritik.POS.restaurant.util.ProductImageUrlUtil;
 import com.kritik.POS.tax.projection.ActiveTaxRateProjection;
 import lombok.Getter;
@@ -36,6 +37,7 @@ public class UserDashboard {
         private final Double itemPrice;
         private final Boolean isAvailable;
         private final Boolean isTrending;
+        private final MenuType menuType;
         private final Integer totalStockAvailable;
 
         private DashBoardItem(UserDashboardMenuItemProjection projection) {
@@ -47,6 +49,7 @@ public class UserDashboard {
             this.itemPrice = projection.getItemPrice();
             this.isAvailable = projection.getIsAvailable();
             this.isTrending = projection.getIsTrending();
+            this.menuType = projection.getMenuType();
             this.totalStockAvailable = projection.getTotalStockAvailable() == null
                     ? null
                     : projection.getTotalStockAvailable().intValue();

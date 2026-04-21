@@ -23,7 +23,6 @@ public interface InventoryService {
 
     PageResponse<StockResponseDto> getStockPage(Long chainId, Long restaurantId, Boolean isActive, Boolean lowStockOnly, String search, Integer pageNumber, Integer pageSize);
 
-    List<MenuItemIngredientDto> getIngredientMenuMapping(Long chainId, Long restaurantId);
 
     StockResponse getStockBySku(String sku);
 
@@ -34,6 +33,16 @@ public interface InventoryService {
     void deductStockForOrder(Order order);
 
     void restoreStockForRefund(Order order);
+
+    void deductStockForRequirements(List<StockRequest> stockRequestList,
+                                    Map<String, Double> ingredientRequirements,
+                                    Map<Long, Double> preparedRequirements,
+                                    Collection<Long> affectedMenuIds);
+
+    void restoreStockForRequirements(List<StockRequest> stockRequestList,
+                                     Map<String, Double> ingredientRequirements,
+                                     Map<Long, Double> preparedRequirements,
+                                     Collection<Long> affectedMenuIds);
 
     void checkOrderStockAvailability(List<StockRequest> stockRequestList,
                                      Map<String, Double> ingredientRequirements,

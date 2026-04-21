@@ -15,7 +15,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -64,6 +63,7 @@ public class IngredientServiceImpl implements IngredientService {
         return PageResponse.from(page);
     }
 
+
     @Override
     public IngredientResponse getIngredientBySku(String sku) {
         return IngredientResponse.fromEntity(inventoryUtil.getAccessibleIngredient(sku));
@@ -79,7 +79,6 @@ public class IngredientServiceImpl implements IngredientService {
         Long restaurantId = tenantAccessService.resolveAccessibleRestaurantId(
                 ingredientRequest.restaurantId() != null ? ingredientRequest.restaurantId() : ingredientStock.getRestaurantId()
         );
-        Double previousStock = ingredientStock.getTotalStock();
 
         if (ingredientStock.getSku() == null) {
             ingredientStock.setSku(UUID.randomUUID().toString());
@@ -87,10 +86,11 @@ public class IngredientServiceImpl implements IngredientService {
         ingredientStock.setRestaurantId(restaurantId);
         ingredientStock.setIngredientName(ingredientRequest.ingredientName().trim());
         ingredientStock.setDescription(InventoryUtil.trimToNull(ingredientRequest.description()));
+        ingredientStock.setCategory(InventoryUtil.trimToNull(ingredientRequest.category()));
         ingredientStock.setSupplier(ingredientRequest.supplierId() == null
                 ? null
                 : inventoryUtil.getAccessibleSupplier(ingredientRequest.supplierId(), restaurantId));
-        ingredientStock.setTotalStock(ingredientRequest.totalStock());
+        ingredientStock.setTotalStock(ingredientStock.getTotalStock() == null ? 0.0 : ingredientStock.getTotalStock());
         ingredientStock.setReorderLevel(ingredientRequest.reorderLevel() == null ? 0.0 : ingredientRequest.reorderLevel());
         ingredientStock.setUnitOfMeasure(
                 ingredientRequest.unitOfMeasure() == null || ingredientRequest.unitOfMeasure().isBlank()
@@ -100,9 +100,6 @@ public class IngredientServiceImpl implements IngredientService {
         ingredientStock.setIsDeleted(false);
         if (ingredientRequest.isActive() != null) {
             ingredientStock.setIsActive(ingredientRequest.isActive());
-        }
-        if (previousStock == null || ingredientStock.getTotalStock() > previousStock) {
-            ingredientStock.setLastRestockedAt(LocalDateTime.now());
         }
 
         IngredientStock savedIngredient = ingredientStockRepository.save(ingredientStock);

@@ -4,6 +4,7 @@ import com.kritik.POS.order.entity.Order;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -23,7 +24,7 @@ public class Invoice {
     private Order order;
 
     @Column(nullable = false)
-    private Double totalAmount;
+    private BigDecimal totalAmount;
 
     @Column(nullable = false)
     private String filePath;

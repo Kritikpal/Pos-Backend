@@ -11,6 +11,7 @@ public class IngredientResponse {
     private Long restaurantId;
     private String ingredientName;
     private String description;
+    private String category;
     private Double totalStock;
     private Double reorderLevel;
     private String unitOfMeasure;
@@ -27,6 +28,7 @@ public class IngredientResponse {
         response.setRestaurantId(ingredientStock.getRestaurantId());
         response.setIngredientName(ingredientStock.getIngredientName());
         response.setDescription(ingredientStock.getDescription());
+        response.setCategory(ingredientStock.getCategory());
         response.setTotalStock(ingredientStock.getTotalStock());
         response.setReorderLevel(ingredientStock.getReorderLevel());
         response.setUnitOfMeasure(ingredientStock.getUnitOfMeasure());

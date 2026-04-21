@@ -337,7 +337,6 @@ public class SuperAdminServiceImpl implements SuperAdminService {
             menuItem.setIsAvailable(false);
             menuItem.getIngredientUsages().clear();
             menuItem.setRecipe(null);
-            menuItem.setHasRecipe(false);
             if (menuItem.getItemStock() != null) {
                 menuItem.getItemStock().setIsDeleted(true);
                 menuItem.getItemStock().setIsActive(false);

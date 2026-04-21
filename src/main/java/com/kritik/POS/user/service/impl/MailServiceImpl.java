@@ -14,7 +14,7 @@ public class MailServiceImpl implements MailService {
 
     private final JavaMailSender mailSender;
 
-    @Value("${app.login-url:http://localhost:8080/login}")
+    @Value("${app.login-url:http://localhost:3000/login}")
     private String loginUrl;
 
     @Value("${app.password-reset-url:http://localhost:8080/reset-password}")

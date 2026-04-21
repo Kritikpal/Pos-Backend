@@ -1,5 +1,8 @@
 package com.kritik.POS.restaurant.projection;
 
+import com.kritik.POS.restaurant.entity.enums.MenuType;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public interface MenuItemSummaryProjection {
@@ -9,11 +12,14 @@ public interface MenuItemSummaryProjection {
     String getProductImage();
     String getItemName();
     String getDescription();
-    Double getPrice();
-    Double getDiscount();
+    BigDecimal getPrice();
+    BigDecimal getDiscount();
+    Boolean getPriceIncludesTax();
+    Long getTaxClassId();
     Boolean getIsAvailable();
     Boolean getIsActive();
     Boolean getIsTrending();
+    MenuType getMenuType();
     Boolean getRecipeBased();
     Integer getBatchSize();
     Integer getTotalStock();

@@ -64,39 +64,50 @@
             font-size: 14px;
             font-weight: bold;
         }
-
     </style>
 </head>
 
 <body>
 
 <div class="invoice-box">
-
-    <!-- Header -->
     <div class="header">
         <h1>INVOICE</h1>
     </div>
 
-    <!-- Order Details -->
     <div class="details">
         <p>
             <strong>Order ID:</strong>
             <span th:text="${invoice.orderId}"></span>
         </p>
-
         <p>
             <strong>Date:</strong>
             <span th:text="${#temporals.format(T(java.time.LocalDateTime).now(), 'dd-MM-yyyy HH:mm')}"></span>
         </p>
+        <p th:if="${invoice.sellerRegistrationNumber != null}">
+            <strong>Seller Tax ID:</strong>
+            <span th:text="${invoice.sellerRegistrationNumber}"></span>
+        </p>
+        <p th:if="${invoice.buyerName != null}">
+            <strong>Buyer:</strong>
+            <span th:text="${invoice.buyerName}"></span>
+        </p>
+        <p th:if="${invoice.buyerTaxId != null}">
+            <strong>Buyer Tax ID:</strong>
+            <span th:text="${invoice.buyerTaxId}"></span>
+        </p>
+        <p th:if="${invoice.buyerTaxCategory != null}">
+            <strong>Buyer Tax Category:</strong>
+            <span th:text="${invoice.buyerTaxCategory}"></span>
+        </p>
     </div>
 
-    <!-- Items Table -->
     <table>
         <thead>
         <tr>
             <th>Item</th>
             <th class="right">Qty</th>
-            <th class="right">Price</th>
+            <th class="right">Unit</th>
+            <th class="right">Tax</th>
             <th class="right">Total</th>
         </tr>
         </thead>
@@ -106,15 +117,39 @@
             <td th:text="${item.name}"></td>
             <td class="right" th:text="${item.quantity}"></td>
             <td class="right" th:text="${item.price}"></td>
-            <td class="right"
-                th:text="${item.quantity * item.price}"></td>
+            <td class="right" th:text="${item.taxAmount}"></td>
+            <td class="right" th:text="${item.total}"></td>
         </tr>
         </tbody>
     </table>
 
-    <!-- Total -->
+    <table style="margin-top: 16px;">
+        <tbody>
+        <tr>
+            <td><strong>Subtotal</strong></td>
+            <td class="right" th:text="${invoice.subtotalAmount}"></td>
+        </tr>
+        <tr>
+            <td><strong>Discount</strong></td>
+            <td class="right" th:text="${invoice.discountAmount}"></td>
+        </tr>
+        <tr>
+            <td><strong>Taxable Amount</strong></td>
+            <td class="right" th:text="${invoice.taxableAmount}"></td>
+        </tr>
+        <tr th:each="tax : ${invoice.taxSummaries}">
+            <td th:text="${tax.taxDisplayName}"></td>
+            <td class="right" th:text="${tax.taxAmount}"></td>
+        </tr>
+        <tr th:if="${invoice.feeAmount != null && invoice.feeAmount > 0}">
+            <td><strong>Fees</strong></td>
+            <td class="right" th:text="${invoice.feeAmount}"></td>
+        </tr>
+        </tbody>
+    </table>
+
     <div class="total">
-        Total: ₹ <span th:text="${invoice.totalPrice}"></span>
+        Total: Rs <span th:text="${invoice.grandTotal}"></span>
     </div>
 
 </div>

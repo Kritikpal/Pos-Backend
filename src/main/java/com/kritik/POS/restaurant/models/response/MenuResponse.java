@@ -4,12 +4,15 @@ import com.kritik.POS.restaurant.entity.ItemPrice;
 import com.kritik.POS.inventory.entity.enums.MenuStockStrategy;
 import com.kritik.POS.inventory.entity.stock.ItemStock;
 import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
+import com.kritik.POS.inventory.entity.stock.PreparedItemStock;
 import com.kritik.POS.restaurant.entity.MenuItem;
+import com.kritik.POS.restaurant.entity.enums.MenuType;
 import com.kritik.POS.inventory.util.InventoryAvailabilityUtil;
 import com.kritik.POS.restaurant.util.ProductImageUrlUtil;
 import com.kritik.POS.restaurant.util.RestaurantUtil;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -21,16 +24,21 @@ public class MenuResponse {
     private String productImage;
     private String itemName;
     private String description;
+    private Long taxClassId;
     private MenuItemPrice itemPrice;
     private Boolean isAvailable;
     private LocalDateTime createdAt;
     private Boolean isActive;
     private Boolean isTrending;
     private Boolean isPrepared;
+    private MenuType menuType;
     private CategoryResponse category;
     private Integer itemInStock;
     private Integer reorderLevel;
     private String unitOfMeasure;
+    private Double availableQty;
+    private Double reservedQty;
+    private String unit;
     private Boolean lowStock;
     private SupplierSummary supplier;
     private Boolean recipeBased;
@@ -58,14 +66,16 @@ public class MenuResponse {
 
     @Data
     public static class MenuItemPrice {
-        private Double price;
-        private Double disCountedPrice;
-        private Double disCount;
+        private BigDecimal price;
+        private BigDecimal disCountedPrice;
+        private BigDecimal disCount;
+        private Boolean priceIncludesTax;
 
         public MenuItemPrice(ItemPrice itemPrice) {
             this.price = itemPrice.getPrice();
             this.disCount = itemPrice.getDisCount();
             this.disCountedPrice = RestaurantUtil.getMenuItemPrice(itemPrice);
+            this.priceIncludesTax = itemPrice.getPriceIncludesTax();
         }
     }
 
@@ -78,32 +88,41 @@ public class MenuResponse {
                 : ProductImageUrlUtil.toClientUrl(menuItem.getProductImage().getUrl()));
         menuResponse.setItemName(menuItem.getItemName());
         menuResponse.setDescription(menuItem.getDescription());
+        menuResponse.setTaxClassId(menuItem.getTaxClassId());
         menuResponse.setItemPrice(new MenuItemPrice(menuItem.getItemPrice()));
         menuResponse.setIsAvailable(menuItem.getIsAvailable());
         menuResponse.setCreatedAt(menuItem.getCreatedAt());
         menuResponse.setIsActive(menuItem.getIsActive());
         menuResponse.setIsTrending(menuItem.getIsTrending());
-        menuResponse.setIsPrepared(Boolean.TRUE.equals(menuItem.getIsPrepared()));
+        menuResponse.setIsPrepared(InventoryAvailabilityUtil.resolveMenuType(menuItem) == MenuType.PREPARED);
+        menuResponse.setMenuType(InventoryAvailabilityUtil.resolveMenuType(menuItem));
         menuResponse.setCategory(new CategoryResponse(menuItem.getCategory().getCategoryId(),
                 menuItem.getCategory().getCategoryName(),
                 menuItem.getCategory().getCategoryDescription(),
                 menuItem.getCategory().getIsActive()));
         menuResponse.setRecipeBased(InventoryAvailabilityUtil.hasRecipe(menuItem));
+        PreparedItemStock preparedItemStock = menuItem.getPreparedItemStock();
         MenuStockStrategy stockStrategy = InventoryAvailabilityUtil.resolveStockStrategy(menuItem);
-        if (stockStrategy != MenuStockStrategy.DIRECT) {
+        if (stockStrategy == MenuStockStrategy.RECIPE || stockStrategy == MenuStockStrategy.PREPARED) {
             menuResponse.setBatchSize(menuItem.getRecipe() == null ? null : menuItem.getRecipe().getBatchSize());
             menuResponse.setItemInStock(InventoryAvailabilityUtil.computeAvailableServings(menuItem));
             menuResponse.setUnitOfMeasure(InventoryAvailabilityUtil.resolveUnitOfMeasure(menuItem));
+            menuResponse.setAvailableQty(resolveAvailableQty(menuItem, preparedItemStock));
+            menuResponse.setReservedQty(resolveReservedQty(preparedItemStock));
+            menuResponse.setUnit(resolveResponseUnit(menuItem, preparedItemStock));
             menuResponse.setLowStock(InventoryAvailabilityUtil.isLowStock(menuItem));
             menuResponse.setIngredients(menuItem.getIngredientUsages().stream()
                     .map(MenuResponse::buildIngredientUsageSummary)
                     .toList());
-        } else {
+        } else if (stockStrategy == MenuStockStrategy.DIRECT) {
             ItemStock itemStock = menuItem.getItemStock();
             if (itemStock != null) {
                 menuResponse.setItemInStock(itemStock.getTotalStock());
                 menuResponse.setReorderLevel(itemStock.getReorderLevel());
                 menuResponse.setUnitOfMeasure(itemStock.getUnitOfMeasure());
+                menuResponse.setAvailableQty(itemStock.getTotalStock() == null ? null : itemStock.getTotalStock().doubleValue());
+                menuResponse.setReservedQty(0.0);
+                menuResponse.setUnit(itemStock.getUnitOfMeasure());
                 menuResponse.setLowStock(InventoryAvailabilityUtil.isLowStock(menuItem));
                 if (itemStock.getSupplier() != null) {
                     SupplierSummary supplierSummary = new SupplierSummary();
@@ -113,8 +132,38 @@ public class MenuResponse {
                     menuResponse.setSupplier(supplierSummary);
                 }
             }
+        } else {
+            menuResponse.setItemInStock(null);
+            menuResponse.setReorderLevel(null);
+            menuResponse.setUnitOfMeasure(null);
+            menuResponse.setAvailableQty(null);
+            menuResponse.setReservedQty(0.0);
+            menuResponse.setUnit(null);
+            menuResponse.setLowStock(false);
         }
         return menuResponse;
+    }
+
+    private static Double resolveAvailableQty(MenuItem menuItem, PreparedItemStock preparedItemStock) {
+        if (preparedItemStock != null) {
+            return preparedItemStock.getAvailableQty() == null ? 0.0 : preparedItemStock.getAvailableQty();
+        }
+        Integer itemInStock = InventoryAvailabilityUtil.computeAvailableServings(menuItem);
+        return itemInStock == null ? null : itemInStock.doubleValue();
+    }
+
+    private static Double resolveReservedQty(PreparedItemStock preparedItemStock) {
+        if (preparedItemStock == null) {
+            return 0.0;
+        }
+        return preparedItemStock.getReservedQty() == null ? 0.0 : preparedItemStock.getReservedQty();
+    }
+
+    private static String resolveResponseUnit(MenuItem menuItem, PreparedItemStock preparedItemStock) {
+        if (preparedItemStock != null && preparedItemStock.getUnitCode() != null) {
+            return preparedItemStock.getUnitCode();
+        }
+        return InventoryAvailabilityUtil.resolveUnitOfMeasure(menuItem);
     }
 
     private static IngredientUsageSummary buildIngredientUsageSummary(MenuItemIngredient ingredientUsage) {

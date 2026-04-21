@@ -5,6 +5,7 @@ import com.kritik.POS.order.entity.enums.PaymentType;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -39,11 +40,45 @@ public class Order {
     @OneToMany(mappedBy = "order",fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SaleItem> orderItemList = new ArrayList<>();
 
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderTaxSummary> orderTaxSummaries = new ArrayList<>();
+
+    @OneToMany(mappedBy = "order", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<OrderLineTax> orderLineTaxes = new ArrayList<>();
+
+    @OneToOne(mappedBy = "order", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    private OrderTaxContext orderTaxContext;
+
+    @Deprecated
     @OneToMany(mappedBy = "order",fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<OrderTax> orderTaxes = new ArrayList<>();
 
     @Column(nullable = false)
-    private Double totalPrice;
+    private BigDecimal totalPrice = BigDecimal.ZERO;
+
+    @Column(name = "currency_code", nullable = false, length = 10)
+    private String currencyCode = "INR";
+
+    @Column(name = "subtotal_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal subtotalAmount = BigDecimal.ZERO;
+
+    @Column(name = "discount_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    @Column(name = "taxable_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal taxableAmount = BigDecimal.ZERO;
+
+    @Column(name = "tax_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal taxAmount = BigDecimal.ZERO;
+
+    @Column(name = "fee_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal feeAmount = BigDecimal.ZERO;
+
+    @Column(name = "rounding_amount", nullable = false, precision = 19, scale = 2)
+    private BigDecimal roundingAmount = BigDecimal.ZERO;
+
+    @Column(name = "grand_total", nullable = false, precision = 19, scale = 2)
+    private BigDecimal grandTotal = BigDecimal.ZERO;
 
     @Column(nullable = false, updatable = false, unique = true)
     private String orderId;

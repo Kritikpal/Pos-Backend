@@ -3,20 +3,20 @@ package com.kritik.POS.restaurant.service.Impl;
 import com.kritik.POS.common.model.PageResponse;
 import com.kritik.POS.common.service.FileUploadService;
 import com.kritik.POS.exception.errors.AppException;
-import com.kritik.POS.inventory.entity.recipi.MenuRecipe;
+import com.kritik.POS.inventory.entity.stock.PreparedItemStock;
 import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.order.repository.SaleItemRepository;
 import com.kritik.POS.restaurant.dto.CategoryResponseDto;
 import com.kritik.POS.restaurant.dto.MenuItemResponseDto;
 import com.kritik.POS.restaurant.entity.Category;
-import com.kritik.POS.inventory.entity.stock.IngredientStock;
 import com.kritik.POS.restaurant.entity.MenuItem;
-import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
 import com.kritik.POS.restaurant.entity.ProductFile;
 import com.kritik.POS.restaurant.entity.RestaurantTable;
+import com.kritik.POS.restaurant.entity.enums.MenuType;
 import com.kritik.POS.restaurant.mapper.RestaurantDtoMapper;
 import com.kritik.POS.restaurant.models.request.CategoryRequest;
 import com.kritik.POS.restaurant.models.request.ItemRequest;
+import com.kritik.POS.restaurant.models.request.MenuUpdateRequest;
 import com.kritik.POS.restaurant.models.request.TableRequest;
 import com.kritik.POS.restaurant.models.response.CategoryResponse;
 import com.kritik.POS.restaurant.models.response.MenuResponse;
@@ -25,7 +25,6 @@ import com.kritik.POS.restaurant.projection.CategorySummaryProjection;
 import com.kritik.POS.restaurant.projection.MenuItemSummaryProjection;
 import com.kritik.POS.restaurant.projection.UserDashboardMenuItemProjection;
 import com.kritik.POS.restaurant.repository.CategoryRepository;
-import com.kritik.POS.inventory.repository.IngredientStockRepository;
 import com.kritik.POS.restaurant.repository.MenuItemRepository;
 import com.kritik.POS.restaurant.repository.RestaurantTableRepository;
 import com.kritik.POS.restaurant.service.RestaurantService;
@@ -37,6 +36,7 @@ import com.kritik.POS.inventory.util.InventoryAvailabilityUtil;
 import com.kritik.POS.security.service.TenantAccessService;
 import com.kritik.POS.tax.projection.ActiveTaxRateProjection;
 import com.kritik.POS.tax.repository.TaxRateRepository;
+import com.kritik.POS.tax.service.TaxService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -48,14 +48,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -69,7 +62,7 @@ public class RestaurantServiceImpl implements RestaurantService {
     private final FileUploadService fileUploadService;
     private final TenantAccessService tenantAccessService;
     private final RestaurantDtoMapper restaurantDtoMapper;
-    private final IngredientStockRepository ingredientStockRepository;
+    private final TaxService taxService;
 
     @Override
     public UserDashboard userDashboard(Integer pageNumber, Integer pageSize, String searchString, Long categoryId) {
@@ -129,6 +122,22 @@ public class RestaurantServiceImpl implements RestaurantService {
             menuItem.setProductImage(productFile);
         }
         MenuItem savedMenu = menuItemRepository.save(menuItem);
+        InventoryUtil.syncMenuAvailability(savedMenu);
+        savedMenu = menuItemRepository.save(savedMenu);
+        return MenuResponse.buildResponseFromMenu(savedMenu);
+    }
+
+    @Override
+    @Transactional
+    public MenuResponse updateMenu(MenuUpdateRequest updateRequest, MultipartFile productImage) {
+        MenuItem menuItem = createMenuItemFromRequest(updateRequest);
+        if (productImage != null && !productImage.isEmpty()) {
+            ProductFile productFile = fileUploadService.uploadFile(productImage);
+            menuItem.setProductImage(productFile);
+        }
+        MenuItem savedMenu = menuItemRepository.save(menuItem);
+        InventoryUtil.syncMenuAvailability(savedMenu);
+        savedMenu = menuItemRepository.save(savedMenu);
         return MenuResponse.buildResponseFromMenu(savedMenu);
     }
 
@@ -253,25 +262,34 @@ public class RestaurantServiceImpl implements RestaurantService {
         return true;
     }
 
+
     private MenuItem createMenuItemFromRequest(ItemRequest itemRequest) {
         MenuItem menuItem = itemRequest.itemId() == null ? new MenuItem() : getMenuItemEntity(itemRequest.itemId());
         Category category = getCategoryEntity(itemRequest.categoryId());
         MenuItem updatedMenuItem = itemRequest.createMenuItemFromRequest(menuItem, category);
         updatedMenuItem.setRestaurantId(category.getRestaurantId());
+        if (updatedMenuItem.getTaxClassId() == null) {
+            updatedMenuItem.setTaxClassId(taxService.getOrCreateDefaultTaxClass(category.getRestaurantId()).getId());
+        }
         updatedMenuItem.setIsDeleted(false);
-        replaceIngredientRecipe(updatedMenuItem, itemRequest.recipeBatchSize(), itemRequest.ingredients(), category.getRestaurantId());
-        if (!InventoryAvailabilityUtil.hasRecipe(updatedMenuItem)) {
-            updatedMenuItem.setIsPrepared(false);
+        if (updatedMenuItem.getMenuType() == null) {
+            updatedMenuItem.setMenuType(com.kritik.POS.restaurant.entity.enums.MenuType.DIRECT);
         }
-        if (Boolean.TRUE.equals(itemRequest.isPrepared()) && !InventoryAvailabilityUtil.hasRecipe(updatedMenuItem)) {
-            throw new AppException("Prepared menu items must also have a recipe", HttpStatus.BAD_REQUEST);
+        return updatedMenuItem;
+    }
+
+    private MenuItem createMenuItemFromRequest(MenuUpdateRequest itemRequest) {
+        MenuItem menuItem = itemRequest.itemId() == null ? new MenuItem() : getMenuItemEntity(itemRequest.itemId());
+        Category category = getCategoryEntity(itemRequest.categoryId());
+        MenuItem updatedMenuItem = itemRequest.createMenuItemFromRequest(menuItem, category);
+        updatedMenuItem.setRestaurantId(category.getRestaurantId());
+        if (updatedMenuItem.getTaxClassId() == null) {
+            updatedMenuItem.setTaxClassId(taxService.getOrCreateDefaultTaxClass(category.getRestaurantId()).getId());
         }
-        if (!Boolean.TRUE.equals(updatedMenuItem.getIsPrepared()) && updatedMenuItem.getPreparedItemStock() != null) {
-            updatedMenuItem.getPreparedItemStock().setAvailableQty(0.0);
-            updatedMenuItem.getPreparedItemStock().setReservedQty(0.0);
-            updatedMenuItem.getPreparedItemStock().setActive(false);
+        updatedMenuItem.setIsDeleted(false);
+        if (updatedMenuItem.getMenuType() == null) {
+            updatedMenuItem.setMenuType(com.kritik.POS.restaurant.entity.enums.MenuType.DIRECT);
         }
-        InventoryUtil.syncMenuAvailability(menuItem);
         return updatedMenuItem;
     }
 
@@ -361,123 +379,5 @@ public class RestaurantServiceImpl implements RestaurantService {
     private String normalizeSearch(String searchString) {
         return searchString == null ? null : searchString.trim();
     }
-
-    private void replaceIngredientRecipe(MenuItem menuItem,
-                                         Integer recipeBatchSize,
-                                         List<ItemRequest.IngredientUsageRequest> ingredientRequests,
-                                         Long restaurantId) {
-        if (ingredientRequests == null && recipeBatchSize == null) {
-            return;
-        }
-
-        if (menuItem.getIngredientUsages() == null) {
-            menuItem.setIngredientUsages(new ArrayList<>());
-        }
-
-        if (ingredientRequests == null) {
-            if (menuItem.getIngredientUsages().isEmpty()) {
-                throw new AppException("Recipe ingredients are required for recipe-based menu items", HttpStatus.BAD_REQUEST);
-            }
-            MenuRecipe recipe = menuItem.getRecipe() == null ? new MenuRecipe() : menuItem.getRecipe();
-            recipe.setMenuItem(menuItem);
-            recipe.setBatchSize(recipeBatchSize);
-            recipe.setActive(true);
-            syncIngredientUsageCollection(recipe.getIngredientUsages(), menuItem.getIngredientUsages());
-            menuItem.setRecipe(recipe);
-            menuItem.setHasRecipe(true);
-            return;
-        }
-
-        if (ingredientRequests == null || ingredientRequests.isEmpty()) {
-            menuItem.getIngredientUsages().clear();
-            if (menuItem.getRecipe() != null) {
-                syncIngredientUsageCollection(menuItem.getRecipe().getIngredientUsages(), List.of());
-            }
-            menuItem.setRecipe(null);
-            menuItem.setHasRecipe(false);
-            return;
-        }
-
-        if (recipeBatchSize == null || recipeBatchSize <= 0) {
-            throw new AppException("Recipe batch size is required for recipe-based menu items", HttpStatus.BAD_REQUEST);
-        }
-        MenuRecipe recipe = menuItem.getRecipe() == null ? new MenuRecipe() : menuItem.getRecipe();
-        recipe.setBatchSize(recipeBatchSize);
-
-        Map<String, MenuItemIngredient> existingUsages = new LinkedHashMap<>();
-        for (MenuItemIngredient existingUsage : menuItem.getIngredientUsages()) {
-            existingUsages.put(existingUsage.getIngredientStock().getSku(), existingUsage);
-        }
-
-        Map<String, IngredientStock> ingredientStocksBySku = loadIngredientStocksBySku(restaurantId, ingredientRequests);
-
-        recipe.setMenuItem(menuItem);
-        recipe.setActive(true);
-
-        Set<String> addedSkus = new HashSet<>();
-        List<MenuItemIngredient> nextUsages = new ArrayList<>();
-        for (ItemRequest.IngredientUsageRequest ingredientRequest : ingredientRequests) {
-            if (!addedSkus.add(ingredientRequest.ingredientSku())) {
-                // Skip duplicate ingredient sku
-                continue;
-            }
-            IngredientStock ingredientStock = ingredientStocksBySku.get(ingredientRequest.ingredientSku());
-
-            MenuItemIngredient ingredientUsage = existingUsages.getOrDefault(ingredientRequest.ingredientSku(), new MenuItemIngredient());
-            ingredientUsage.setMenuItem(menuItem);
-            ingredientUsage.setRecipe(recipe);
-            ingredientUsage.setIngredientStock(ingredientStock);
-            ingredientUsage.setQuantityRequired(ingredientRequest.quantityRequired());
-            nextUsages.add(ingredientUsage);
-        }
-
-        menuItem.getIngredientUsages().clear();
-        menuItem.getIngredientUsages().addAll(nextUsages);
-        syncIngredientUsageCollection(recipe.getIngredientUsages(), nextUsages);
-        menuItem.setRecipe(recipe);
-        menuItem.setHasRecipe(!menuItem.getIngredientUsages().isEmpty());
-
-        if (!menuItem.getIngredientUsages().isEmpty() && menuItem.getItemStock() != null) {
-            menuItem.getItemStock().setTotalStock(0);
-            menuItem.getItemStock().setIsActive(false);
-        }
-    }
-
-    private Map<String, IngredientStock> loadIngredientStocksBySku(Long restaurantId,
-                                                                   List<ItemRequest.IngredientUsageRequest> ingredientRequests) {
-        Set<String> requestedSkus = new LinkedHashSet<>();
-        for (ItemRequest.IngredientUsageRequest ingredientRequest : ingredientRequests) {
-            requestedSkus.add(ingredientRequest.ingredientSku());
-        }
-
-        Map<String, IngredientStock> ingredientStocksBySku = new LinkedHashMap<>();
-        for (IngredientStock ingredientStock : ingredientStockRepository.findAllBySkuInAndIsDeletedFalse(requestedSkus)) {
-            if (!restaurantId.equals(ingredientStock.getRestaurantId())) {
-                throw new AppException("Ingredient does not belong to the selected restaurant", HttpStatus.BAD_REQUEST);
-            }
-            ingredientStocksBySku.put(ingredientStock.getSku(), ingredientStock);
-        }
-
-        validateAllIngredientsResolved(requestedSkus, ingredientStocksBySku.keySet());
-        return ingredientStocksBySku;
-    }
-
-    private void validateAllIngredientsResolved(Collection<String> requestedSkus, Collection<String> resolvedSkus) {
-        if (requestedSkus.size() == resolvedSkus.size()) {
-            return;
-        }
-        for (String requestedSku : requestedSkus) {
-            if (!resolvedSkus.contains(requestedSku)) {
-                throw new AppException("Invalid ingredient sku", HttpStatus.BAD_REQUEST);
-            }
-        }
-    }
-
-    private void syncIngredientUsageCollection(List<MenuItemIngredient> managedUsages,
-                                               List<MenuItemIngredient> nextUsages) {
-        managedUsages.clear();
-        managedUsages.addAll(nextUsages);
-    }
-
 
 }

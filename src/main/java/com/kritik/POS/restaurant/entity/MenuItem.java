@@ -6,8 +6,11 @@ import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
 import com.kritik.POS.inventory.entity.recipi.MenuRecipe;
 import com.kritik.POS.inventory.entity.stock.PreparedItemStock;
 import com.kritik.POS.order.entity.SaleItem;
+import com.kritik.POS.restaurant.entity.enums.MenuType;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -33,11 +36,16 @@ public class MenuItem {
     @Column(name = "restaurant_id")
     private Long restaurantId;
 
+    @Column(name = "tax_class_id")
+    private Long taxClassId;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 
     @JoinColumn(nullable = false, name = "priceId")
     @OneToOne(cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private ItemPrice itemPrice;
 
     @Column(nullable = false)
@@ -51,6 +59,8 @@ public class MenuItem {
 
     @ManyToOne
     @JoinColumn(name = "categoryId", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private Category category;
 
     @Column(nullable = false)
@@ -62,33 +72,47 @@ public class MenuItem {
     @Column(nullable = false)
     private Boolean isTrending = false;
 
-    @Column
-    private Boolean isPrepared = false;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "menu_type", nullable = false, length = 30)
+    private MenuType menuType = MenuType.DIRECT;
 
     @OneToMany(mappedBy = "menuItem")
     @JsonIgnore
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private List<SaleItem> saleItems;
 
     @OneToOne(mappedBy = "menuItem", cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private ItemStock itemStock;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id", referencedColumnName = "menu_item_id", insertable = false, updatable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private PreparedItemStock preparedItemStock;
 
     @OneToOne
     @JoinColumn
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private ProductFile productImage;
 
-    @Column(name = "has_recipi")
-    private Boolean hasRecipe = false;
-
     @OneToOne(mappedBy = "menuItem", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private MenuRecipe recipe;
 
     @OneToMany(mappedBy = "menuItem", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private List<MenuItemIngredient> ingredientUsages = new ArrayList<>();
+
+    @Version
+    @Column(name = "item_version")
+    private Long itemVersion = 0L;
 
     @PrePersist
     public void prePersist() {

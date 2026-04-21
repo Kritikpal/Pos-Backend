@@ -1,7 +1,6 @@
 package com.kritik.POS.restaurant.models.request;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import org.springframework.validation.annotation.Validated;
@@ -13,10 +12,9 @@ public record IngredientRequest(
         @NotBlank(message = "Ingredient name is required")
         String ingredientName,
         String description,
+        @Size(max = 120, message = "Category must be 120 characters or less")
+        String category,
         Long supplierId,
-        @NotNull(message = "Total stock is required")
-        @PositiveOrZero(message = "Total stock must be 0 or greater")
-        Double totalStock,
         @PositiveOrZero(message = "Reorder level must be 0 or greater")
         Double reorderLevel,
         @Size(max = 30, message = "Unit of measure must be 30 characters or less")

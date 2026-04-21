@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 @Entity
 @Data
 public class ItemPrice {
@@ -12,10 +14,13 @@ public class ItemPrice {
     private Long priceId;
 
     @Column(nullable = false)
-    private Double price = 0.0;
+    private BigDecimal price = BigDecimal.ZERO;
 
     @Column(nullable = false)
-    private Double disCount = 0.0;
+    private BigDecimal disCount = BigDecimal.ZERO;
+
+    @Column(name = "price_includes_tax", nullable = false)
+    private Boolean priceIncludesTax = false;
 
     @OneToOne(mappedBy = "itemPrice")
     @JsonIgnore

@@ -26,8 +26,7 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
             where o.orderId = :orderId
               and o.isDeleted = false
               and si.isDeleted = false
-              and coalesce(menuItem.hasRecipe, false) = false
-              and coalesce(menuItem.isPrepared, false) = false
+              and menuItem.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.DIRECT
             group by itemStock.sku
             """)
     List<DirectStockDeductionProjection> findDirectStockDeductionsByOrderId(@Param("orderId") String orderId);
@@ -43,8 +42,7 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
             where o.orderId = :orderId
               and o.isDeleted = false
               and si.isDeleted = false
-              and coalesce(menuItem.hasRecipe, false) = true
-              and coalesce(menuItem.isPrepared, false) = false
+              and menuItem.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE
               and ingredientUsage.recipe.batchSize > 0
             group by ingredientStock.sku
             """)
@@ -58,8 +56,7 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
             where o.orderId = :orderId
               and o.isDeleted = false
               and si.isDeleted = false
-              and coalesce(menuItem.hasRecipe, false) = false
-              and coalesce(menuItem.isPrepared, false) = false
+              and menuItem.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.DIRECT
             """)
     List<Long> findDistinctDirectMenuIdsByOrderId(@Param("orderId") String orderId);
 
@@ -71,8 +68,7 @@ public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
             where o.orderId = :orderId
               and o.isDeleted = false
               and si.isDeleted = false
-              and coalesce(menuItem.hasRecipe, false) = true
-              and coalesce(menuItem.isPrepared, false) = true
+              and menuItem.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED
             """)
     List<Long> findDistinctPreparedMenuIdsByOrderId(@Param("orderId") String orderId);
 

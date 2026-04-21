@@ -1,19 +1,14 @@
 package com.kritik.POS.inventory.entity.recipi;
 
 import com.kritik.POS.restaurant.entity.MenuItem;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.OneToOne;
-import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,6 +26,8 @@ public class MenuRecipe {
 
     @OneToOne
     @JoinColumn(name = "menu_item_id", nullable = false)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private MenuItem menuItem;
 
     @Column(name = "batch_size", nullable = false)
@@ -40,5 +37,20 @@ public class MenuRecipe {
     private Boolean active = true;
 
     @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     private List<MenuItemIngredient> ingredientUsages = new ArrayList<>();
+
+    @Version
+    @Column(name = "recipe_version")
+    private Integer recipeVersion = 0;
+
+    @CreatedDate
+    @Column(name = "created_date")
+    private Instant createdDate;
+
+    @LastModifiedDate
+    @Column(name = "last_modified_date")
+    private Instant lastModifiedDate;
+
 }

@@ -4,20 +4,30 @@ import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.entity.OrderTax;
 import com.kritik.POS.order.entity.SaleItem;
 
+import java.math.BigDecimal;
+
 public class OrderUtil {
-    public static Double getTotalPrice(Order order) {
-        double totalPrice = 0.0;
+    public static BigDecimal getTotalPrice(Order order) {
+        BigDecimal totalPrice = BigDecimal.ZERO;
         if (order.getOrderItemList() != null && !order.getOrderItemList().isEmpty()) {
             for (SaleItem orderItem : order.getOrderItemList()) {
-                totalPrice += orderItem.getSaleItemPrice() * orderItem.getAmount();
+                BigDecimal linePrice = orderItem.getSaleItemPrice() == null
+                        ? BigDecimal.ZERO
+                        : orderItem.getSaleItemPrice();
+                totalPrice = totalPrice.add(linePrice.multiply(BigDecimal.valueOf(orderItem.getAmount())));
             }
             if (order.getOrderTaxes() != null && !order.getOrderTaxes().isEmpty()) {
-                Double totaltax = 0.0;
+                BigDecimal totalTaxRate = BigDecimal.ZERO;
                 for (OrderTax orderTax : order.getOrderTaxes()) {
-                    totaltax += orderTax.getTaxAmount();
+                    BigDecimal taxAmount = orderTax.getTaxAmount() == null
+                            ? BigDecimal.ZERO
+                            : BigDecimal.valueOf(orderTax.getTaxAmount());
+                    totalTaxRate = totalTaxRate.add(taxAmount);
                 }
-                if (totaltax != 0.0) {
-                    totalPrice += (totalPrice * totaltax) / 100;
+                if (totalTaxRate.compareTo(BigDecimal.ZERO) != 0) {
+                    totalPrice = totalPrice.add(
+                            totalPrice.multiply(totalTaxRate).divide(BigDecimal.valueOf(100))
+                    );
                 }
             }
         }

@@ -5,6 +5,7 @@ import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
 import lombok.Data;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -12,7 +13,7 @@ import java.util.List;
 @Data
 public class OrderResponse {
     private String orderId;
-    private Double totalPrice;
+    private BigDecimal totalPrice;
     private PaymentType paymentType;
     private PaymentStatus paymentStatus;
     private LocalDateTime paymentTime = LocalDateTime.now();
@@ -20,7 +21,7 @@ public class OrderResponse {
     @Data
     static class OrderItemResponse {
         private String saleItemName;
-        private Double saleItemPrice;
+        private BigDecimal saleItemPrice;
         private Integer amount;
     }
 
