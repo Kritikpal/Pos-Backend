@@ -1,10 +1,10 @@
 package com.kritik.POS.inventory.service;
 
 import com.kritik.POS.common.model.PageResponse;
+import com.kritik.POS.inventory.models.request.StockReceiptCreateRequest;
+import com.kritik.POS.inventory.models.response.StockReceiptResponse;
 import com.kritik.POS.inventory.models.response.StockReceiptSkuOptionDto;
 import com.kritik.POS.inventory.models.response.StockReceiptResponseDto;
-import com.kritik.POS.restaurant.models.request.StockReceiptCreateRequest;
-import com.kritik.POS.restaurant.models.response.StockReceiptResponse;
 import jakarta.transaction.Transactional;
 
 import java.util.List;

@@ -1,5 +1,7 @@
 package com.kritik.POS.user.service.impl;
 
+import com.kritik.POS.email.api.models.AccountCreatedEmailRequested;
+import com.kritik.POS.email.api.models.PasswordResetEmailRequested;
 import com.kritik.POS.exception.errors.BadRequestException;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.restaurant.entity.Restaurant;
@@ -12,14 +14,15 @@ import com.kritik.POS.user.model.request.UserUpdateRequest;
 import com.kritik.POS.user.model.response.UserProjection;
 import com.kritik.POS.user.model.response.UserResponse;
 import com.kritik.POS.user.repository.*;
-import com.kritik.POS.user.service.MailService;
 import com.kritik.POS.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -36,7 +39,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final RestaurantRepository restaurantRepository;
     private final TenantAccessService tenantAccessService;
-    private final MailService mailService;
+    private final ApplicationEventPublisher eventPublisher;
     private final PasswordResetRequestRepository passwordResetRequestRepository;
     private final JwtUtil jwtUtil;
 
@@ -67,6 +70,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public void createRestaurantAdmin(Long chainId, Long restaurantId, String email, String phone, String password) {
         assertUniqueEmail(email);
 
@@ -81,10 +85,11 @@ public class UserServiceImpl implements UserService {
         user.setRoles(Set.of(role));
 
         userRepository.save(user);
-        mailService.sendNewUserEmail(email, password);
+        publishAccountCreatedEmail(email, password);
     }
 
     @Override
+    @Transactional
     public void createChainAdmin(Long chainId, String email, String phone, String password) {
         assertUniqueEmail(email);
 
@@ -98,10 +103,11 @@ public class UserServiceImpl implements UserService {
         user.setRoles(Set.of(role));
 
         userRepository.save(user);
-        mailService.sendNewUserEmail(email, password);
+        publishAccountCreatedEmail(email, password);
     }
 
     @Override
+    @Transactional
     public void createSuperAdmin(String email, String phone, String password) {
         assertUniqueEmail(email);
 
@@ -114,7 +120,7 @@ public class UserServiceImpl implements UserService {
         user.setRoles(Set.of(role));
 
         userRepository.save(user);
-        mailService.sendNewUserEmail(email, password);
+        publishAccountCreatedEmail(email, password);
     }
 
 
@@ -124,6 +130,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public UserResponse createUser(UserCreateRequest request) {
         assertUniqueEmail(request.getEmail());
 
@@ -138,7 +145,7 @@ public class UserServiceImpl implements UserService {
         user.setRoles(Set.of(role));
 
         User saved = userRepository.save(user);
-        mailService.sendNewUserEmail(saved.getEmail(), request.getPassword());
+        publishAccountCreatedEmail(saved.getEmail(), request.getPassword());
         return toUserResponse(saved);
     }
 
@@ -302,6 +309,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional
     public void createStaff(Long restaurantId, String email, String phone, String password) {
         assertUniqueEmail(email);
 
@@ -319,10 +327,11 @@ public class UserServiceImpl implements UserService {
         user.setRoles(Set.of(role));
 
         userRepository.save(user);
-        mailService.sendNewUserEmail(email, password);
+        publishAccountCreatedEmail(email, password);
     }
 
     @Override
+    @Transactional
     public boolean sendPasswordResetEmail(String email) throws AppException {
         User user = userRepository.findByEmail(email.trim().toLowerCase())
                 .orElseThrow(() -> new BadRequestException("User with this email not found"));
@@ -356,8 +365,7 @@ public class UserServiceImpl implements UserService {
 
         passwordResetRequestRepository.save(resetRequest);
 
-        // Send password reset email
-        mailService.sendPasswordResetEmail(user.getEmail(), resetToken);
+        eventPublisher.publishEvent(new PasswordResetEmailRequested(user.getEmail(), resetToken));
 
         return true;
     }
@@ -406,5 +414,8 @@ public class UserServiceImpl implements UserService {
         return true;
     }
 
-}
+    private void publishAccountCreatedEmail(String email, String password) {
+        eventPublisher.publishEvent(new AccountCreatedEmailRequested(email, password));
+    }
 
+}

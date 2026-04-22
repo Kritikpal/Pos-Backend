@@ -2,13 +2,13 @@ package com.kritik.POS.inventory.service.Impl;
 
 import com.kritik.POS.common.model.PageResponse;
 import com.kritik.POS.inventory.entity.stockEntry.Supplier;
+import com.kritik.POS.inventory.models.request.SupplierRequest;
+import com.kritik.POS.inventory.models.response.SupplierResponse;
 import com.kritik.POS.inventory.models.response.SupplierResponseDto;
 import com.kritik.POS.inventory.repository.SupplierRepository;
 import com.kritik.POS.inventory.service.SupplierService;
 import com.kritik.POS.inventory.util.InventoryUtil;
 import com.kritik.POS.restaurant.mapper.RestaurantDtoMapper;
-import com.kritik.POS.restaurant.models.request.SupplierRequest;
-import com.kritik.POS.restaurant.models.response.SupplierResponse;
 import com.kritik.POS.security.service.TenantAccessService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;

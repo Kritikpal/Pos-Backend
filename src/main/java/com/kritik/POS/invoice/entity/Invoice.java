@@ -1,11 +1,14 @@
 package com.kritik.POS.invoice.entity;
 
-import com.kritik.POS.order.entity.Order;
-import jakarta.persistence.*;
-import lombok.Data;
-
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import lombok.Data;
 
 @Entity
 @Table(name = "invoice")
@@ -19,9 +22,8 @@ public class Invoice {
     @Column(nullable = false, unique = true)
     private String invoiceNumber;
 
-    @OneToOne
-    @JoinColumn(name = "order_id", nullable = false)
-    private Order order;
+    @Column(name = "order_id", nullable = false)
+    private Long orderId;
 
     @Column(nullable = false)
     private BigDecimal totalAmount;

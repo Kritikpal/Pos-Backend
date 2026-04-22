@@ -1,5 +1,6 @@
 package com.kritik.POS.order.service;
 
+import com.kritik.POS.common.util.MoneyUtils;
 import com.kritik.POS.order.entity.ConfiguredSaleItem;
 import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.entity.OrderLineTax;
@@ -7,13 +8,12 @@ import com.kritik.POS.order.entity.OrderTaxContext;
 import com.kritik.POS.order.entity.OrderTaxSummary;
 import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.order.model.request.OrderTaxContextRequest;
-import com.kritik.POS.tax.entity.TaxRegistration;
-import com.kritik.POS.tax.model.AppliedTaxComponent;
-import com.kritik.POS.tax.model.TaxBuyerContext;
-import com.kritik.POS.tax.model.TaxComputationResult;
-import com.kritik.POS.tax.model.TaxableChargeComponent;
-import com.kritik.POS.tax.service.TaxService;
-import com.kritik.POS.tax.util.MoneyUtils;
+import com.kritik.POS.tax.api.AppliedTaxComponent;
+import com.kritik.POS.tax.api.TaxApi;
+import com.kritik.POS.tax.api.TaxBuyerContext;
+import com.kritik.POS.tax.api.TaxComputationResult;
+import com.kritik.POS.tax.api.TaxRegistrationSnapshot;
+import com.kritik.POS.tax.api.TaxableChargeComponent;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -29,7 +29,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class OrderPricingService {
 
-    private final TaxService taxService;
+    private final TaxApi taxApi;
 
     public void applyPricing(Order order,
                              Long restaurantId,
@@ -49,7 +49,7 @@ public class OrderPricingService {
             }
         }
 
-        TaxComputationResult computation = taxService.computeOrderTaxes(
+        TaxComputationResult computation = taxApi.computeOrderTaxes(
                 restaurantId,
                 components,
                 toBuyerContext(request)
@@ -207,12 +207,12 @@ public class OrderPricingService {
             context.setOrder(order);
             order.setOrderTaxContext(context);
         }
-        TaxRegistration registration = taxService.getDefaultTaxRegistration(restaurantId);
+        TaxRegistrationSnapshot registration = taxApi.getDefaultTaxRegistration(restaurantId);
         if (registration != null) {
-            context.setSellerTaxRegistrationId(registration.getId());
-            context.setSellerRegistrationNumberSnapshot(registration.getRegistrationNumber());
-            context.setSellerCountryCode(registration.getCountryCode());
-            context.setSellerRegionCode(registration.getRegionCode());
+            context.setSellerTaxRegistrationId(registration.id());
+            context.setSellerRegistrationNumberSnapshot(registration.registrationNumber());
+            context.setSellerCountryCode(registration.countryCode());
+            context.setSellerRegionCode(registration.regionCode());
         } else {
             context.setSellerTaxRegistrationId(null);
             context.setSellerRegistrationNumberSnapshot(null);

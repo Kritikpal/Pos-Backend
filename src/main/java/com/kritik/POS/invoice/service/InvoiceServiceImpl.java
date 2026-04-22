@@ -8,11 +8,9 @@ import com.kritik.POS.invoice.model.InvoiceData;
 import com.kritik.POS.invoice.model.InvoiceInfo;
 import com.kritik.POS.invoice.model.InvoiceItem;
 import com.kritik.POS.invoice.model.InvoiceTaxSummary;
-import com.kritik.POS.order.entity.ConfiguredSaleItem;
+import com.kritik.POS.order.api.OrderInvoiceItemSnapshot;
+import com.kritik.POS.order.api.OrderInvoiceSnapshot;
 import com.kritik.POS.invoice.repository.InvoiceRepository;
-import com.kritik.POS.order.entity.Order;
-import com.kritik.POS.order.entity.SaleItem;
-import com.kritik.POS.order.repository.ConfiguredSaleItemRepository;
 import com.kritik.POS.restaurant.entity.ProductFile;
 import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import java.io.ByteArrayOutputStream;
@@ -39,13 +37,12 @@ import org.thymeleaf.context.Context;
 public class InvoiceServiceImpl implements InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
-    private final ConfiguredSaleItemRepository configuredSaleItemRepository;
     private final TemplateEngine templateEngine;
     private final FileUploadService fileUploadService;
 
     @Override
-    public void generateInvoice(Order order) {
-        if (invoiceRepository.existsByOrder(order)) {
+    public void generateInvoice(OrderInvoiceSnapshot order) {
+        if (invoiceRepository.existsByOrderId(order.orderDbId())) {
             return;
         }
 
@@ -60,8 +57,8 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         Invoice invoice = new Invoice();
         invoice.setInvoiceNumber(invoiceNumber);
-        invoice.setOrder(order);
-        invoice.setTotalAmount(order.getTotalPrice());
+        invoice.setOrderId(order.orderDbId());
+        invoice.setTotalAmount(order.grandTotal());
         invoice.setFilePath(filePath);
         invoice.setGeneratedAt(LocalDateTime.now());
 
@@ -107,58 +104,39 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
     }
 
-    private InvoiceData mapToInvoiceData(Order order) {
+    private InvoiceData mapToInvoiceData(OrderInvoiceSnapshot order) {
         List<InvoiceItem> items = new ArrayList<>();
-        for (SaleItem item : order.getOrderItemList()) {
+        for (OrderInvoiceItemSnapshot item : order.items()) {
             items.add(new InvoiceItem(
-                    item.getSaleItemName(),
-                    item.getAmount(),
-                    item.getSaleItemPrice(),
-                    item.getLineTaxAmount(),
-                    item.getLineTotalAmount()
-            ));
-        }
-        for (ConfiguredSaleItem item : configuredSaleItemRepository.findAllByOrder_IdOrderByIdAsc(order.getId())) {
-            String lineName = item.getLineName();
-            if (!item.getSelections().isEmpty()) {
-                String selectionSummary = item.getSelections().stream()
-                        .map(selection -> selection.getSlotName() + ": " + selection.getChildItemName())
-                        .reduce((left, right) -> left + ", " + right)
-                        .orElse(null);
-                if (selectionSummary != null && !selectionSummary.isBlank()) {
-                    lineName = lineName + " (" + selectionSummary + ")";
-                }
-            }
-            items.add(new InvoiceItem(
-                    lineName,
-                    item.getAmount(),
-                    item.getUnitPrice(),
-                    item.getLineTaxAmount(),
-                    item.getLineTotalAmount()
+                    item.lineName(),
+                    item.amount(),
+                    item.unitPrice(),
+                    item.lineTaxAmount(),
+                    item.lineTotalAmount()
             ));
         }
 
-        List<InvoiceTaxSummary> taxSummaries = order.getOrderTaxSummaries().stream()
+        List<InvoiceTaxSummary> taxSummaries = order.taxSummaries().stream()
                 .map(summary -> new InvoiceTaxSummary(
-                        summary.getTaxDisplayName(),
-                        summary.getTaxableBaseAmount(),
-                        summary.getTaxAmount(),
-                        summary.getCurrencyCode()
+                        summary.taxDisplayName(),
+                        summary.taxableBaseAmount(),
+                        summary.taxAmount(),
+                        summary.currencyCode()
                 ))
                 .toList();
 
         return new InvoiceData(
-                order.getOrderId(),
-                order.getSubtotalAmount(),
-                order.getDiscountAmount(),
-                order.getTaxableAmount(),
-                order.getTaxAmount(),
-                order.getFeeAmount(),
-                order.getGrandTotal(),
-                order.getOrderTaxContext() == null ? null : order.getOrderTaxContext().getSellerRegistrationNumberSnapshot(),
-                order.getOrderTaxContext() == null ? null : order.getOrderTaxContext().getBuyerName(),
-                order.getOrderTaxContext() == null ? null : order.getOrderTaxContext().getBuyerTaxId(),
-                order.getOrderTaxContext() == null ? null : order.getOrderTaxContext().getBuyerTaxCategory(),
+                order.orderId(),
+                order.subtotalAmount(),
+                order.discountAmount(),
+                order.taxableAmount(),
+                order.taxAmount(),
+                order.feeAmount(),
+                order.grandTotal(),
+                order.sellerRegistrationNumber(),
+                order.buyerName(),
+                order.buyerTaxId(),
+                order.buyerTaxCategory(),
                 taxSummaries,
                 items
         );

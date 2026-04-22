@@ -1,9 +1,9 @@
 package com.kritik.POS.order.model.response;
 
 import com.kritik.POS.order.entity.OrderLineTax;
-import com.kritik.POS.tax.entity.enums.TaxCalculationMode;
-import com.kritik.POS.tax.entity.enums.TaxCompoundMode;
-import com.kritik.POS.tax.entity.enums.TaxValueType;
+import com.kritik.POS.tax.api.TaxCalculationMode;
+import com.kritik.POS.tax.api.TaxCompoundMode;
+import com.kritik.POS.tax.api.TaxValueType;
 import java.math.BigDecimal;
 
 public record OrderLineTaxResponse(

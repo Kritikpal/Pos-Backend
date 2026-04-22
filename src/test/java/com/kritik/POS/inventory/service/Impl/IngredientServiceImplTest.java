@@ -1,10 +1,10 @@
 package com.kritik.POS.inventory.service.Impl;
 
 import com.kritik.POS.inventory.entity.stock.IngredientStock;
+import com.kritik.POS.inventory.models.request.IngredientRequest;
+import com.kritik.POS.inventory.models.response.IngredientResponse;
 import com.kritik.POS.inventory.repository.IngredientStockRepository;
 import com.kritik.POS.inventory.util.InventoryUtil;
-import com.kritik.POS.restaurant.models.request.IngredientRequest;
-import com.kritik.POS.restaurant.models.response.IngredientResponse;
 import com.kritik.POS.security.service.TenantAccessService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

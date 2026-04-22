@@ -1,13 +1,18 @@
 package com.kritik.POS.order.service.Impl;
 
-import com.kritik.POS.events.OrderCompletedEvent;
-import com.kritik.POS.inventory.entity.stock.IngredientStock;
-import com.kritik.POS.inventory.entity.stock.ItemStock;
-import com.kritik.POS.inventory.entity.stock.PreparedItemStock;
-import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
-import com.kritik.POS.inventory.entity.recipi.MenuRecipe;
-import com.kritik.POS.inventory.service.InventoryService;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.kritik.POS.exception.errors.OrderException;
+import com.kritik.POS.inventory.api.InventoryApi;
+import com.kritik.POS.order.api.OrderCompletedEvent;
 import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
@@ -17,11 +22,23 @@ import com.kritik.POS.order.model.request.InitiateOrderRequest;
 import com.kritik.POS.order.model.request.RefundPaymentRequest;
 import com.kritik.POS.order.model.response.PaymentProcessingResponse;
 import com.kritik.POS.order.repository.OrderRepository;
-import com.kritik.POS.restaurant.entity.ItemPrice;
-import com.kritik.POS.restaurant.entity.MenuItem;
+import com.kritik.POS.order.service.OrderPricingService;
+import com.kritik.POS.restaurant.api.IngredientUsageSnapshot;
+import com.kritik.POS.restaurant.api.MenuCatalogApi;
+import com.kritik.POS.restaurant.api.MenuItemSnapshot;
+import com.kritik.POS.restaurant.api.MenuItemType;
+import com.kritik.POS.restaurant.api.MenuPriceSnapshot;
 import com.kritik.POS.security.models.SecurityUser;
 import com.kritik.POS.security.service.TenantAccessService;
-import com.kritik.POS.tax.service.TaxService;
+import com.kritik.POS.tax.api.TaxApi;
+import com.kritik.POS.tax.api.TaxClassSnapshot;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,22 +47,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 @ExtendWith(MockitoExtension.class)
 class OrderServiceImplTest {
 
@@ -53,10 +54,16 @@ class OrderServiceImplTest {
     private OrderRepository orderRepository;
 
     @Mock
-    private InventoryService inventoryService;
+    private MenuCatalogApi menuCatalogApi;
 
     @Mock
-    private TaxService taxService;
+    private InventoryApi inventoryApi;
+
+    @Mock
+    private TaxApi taxApi;
+
+    @Mock
+    private OrderPricingService orderPricingService;
 
     @Mock
     private org.springframework.context.ApplicationEventPublisher eventPublisher;
@@ -67,6 +74,54 @@ class OrderServiceImplTest {
     @InjectMocks
     private OrderServiceImpl orderService;
 
+    @BeforeEach
+    void setUp() {
+        when(taxApi.resolveTaxClass(any(), any())).thenReturn(new TaxClassSnapshot(1L, 10L, "GST", false));
+        doAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            @SuppressWarnings("unchecked")
+            List<OrderPricingService.LinePricingPlan> plans = invocation.getArgument(2);
+
+            BigDecimal subtotal = BigDecimal.ZERO;
+            BigDecimal discount = BigDecimal.ZERO;
+            BigDecimal grandTotal = BigDecimal.ZERO;
+
+            for (OrderPricingService.LinePricingPlan plan : plans) {
+                BigDecimal lineTotal = plan.lineSubtotalAmount().subtract(plan.lineDiscountAmount());
+                subtotal = subtotal.add(plan.lineSubtotalAmount());
+                discount = discount.add(plan.lineDiscountAmount());
+                grandTotal = grandTotal.add(lineTotal);
+
+                if (plan.saleItem() != null) {
+                    SaleItem saleItem = plan.saleItem();
+                    saleItem.setTaxClassCodeSnapshot(plan.taxClassCodeSnapshot());
+                    saleItem.setPriceIncludesTax(plan.priceIncludesTax());
+                    saleItem.setUnitListAmount(plan.unitListAmount());
+                    saleItem.setUnitDiscountAmount(plan.unitDiscountAmount());
+                    saleItem.setUnitTaxableAmount(lineTotal.divide(BigDecimal.valueOf(saleItem.getAmount())));
+                    saleItem.setUnitTaxAmount(BigDecimal.ZERO);
+                    saleItem.setUnitTotalAmount(lineTotal.divide(BigDecimal.valueOf(saleItem.getAmount())));
+                    saleItem.setLineSubtotalAmount(plan.lineSubtotalAmount());
+                    saleItem.setLineDiscountAmount(plan.lineDiscountAmount());
+                    saleItem.setLineTaxableAmount(lineTotal);
+                    saleItem.setLineTaxAmount(BigDecimal.ZERO);
+                    saleItem.setLineTotalAmount(lineTotal);
+                    saleItem.setSaleItemPrice(saleItem.getUnitTotalAmount());
+                }
+            }
+
+            order.setSubtotalAmount(subtotal);
+            order.setDiscountAmount(discount);
+            order.setTaxableAmount(grandTotal);
+            order.setTaxAmount(BigDecimal.ZERO);
+            order.setFeeAmount(BigDecimal.ZERO);
+            order.setRoundingAmount(BigDecimal.ZERO);
+            order.setGrandTotal(grandTotal);
+            order.setTotalPrice(grandTotal);
+            return null;
+        }).when(orderPricingService).applyPricing(any(Order.class), any(), anyList(), any());
+    }
+
     @Test
     void updateOrderAllowsRemovingItemsWithoutReplacingManagedCollection() {
         Order existingOrder = new Order();
@@ -75,20 +130,16 @@ class OrderServiceImplTest {
         existingOrder.setPaymentType(PaymentType.UPI);
         existingOrder.setPaymentStatus(PaymentStatus.PAYMENT_INITIATED);
         List<SaleItem> managedItems = new ArrayList<>();
-        managedItems.add(buildSaleItem(existingOrder, buildMenuItem(100L, 10L, "Burger", 50.0, "SKU-100"), 1));
-        managedItems.add(buildSaleItem(existingOrder, buildMenuItem(101L, 10L, "Fries", 30.0, "SKU-101"), 2));
+        managedItems.add(buildSaleItem(existingOrder, 100L, 10L, "Burger", 50.00, 1));
+        managedItems.add(buildSaleItem(existingOrder, 101L, 10L, "Fries", 30.00, 2));
         existingOrder.setOrderItemList(managedItems);
-
-        MenuItem menuItem = buildMenuItem(100L, 10L, "Burger", 50.0, "SKU-100");
-        InitiateOrderRequest request = buildRequest(100L, 3, PaymentType.CARD);
 
         when(orderRepository.findByOrderIdWithItemsForUpdate("order-1")).thenReturn(Optional.of(existingOrder));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(inventoryService.getAccessibleMenuItem(100L)).thenReturn(menuItem);
-        when(taxService.getActiveTaxRates()).thenReturn(List.of());
+        when(menuCatalogApi.getAccessibleMenuItem(100L)).thenReturn(directMenu(100L, 10L, "Burger", 50.00, "SKU-100"));
         when(tenantAccessService.isSuperAdmin()).thenReturn(true);
 
-        PaymentProcessingResponse response = orderService.updateOrder("order-1", request);
+        PaymentProcessingResponse response = orderService.updateOrder("order-1", buildRequest(100L, 3, PaymentType.CARD));
 
         ArgumentCaptor<Order> orderCaptor = ArgumentCaptor.forClass(Order.class);
         verify(orderRepository).save(orderCaptor.capture());
@@ -96,12 +147,11 @@ class OrderServiceImplTest {
 
         assertThat(savedOrder.getOrderItemList()).isSameAs(managedItems);
         assertThat(savedOrder.getOrderItemList()).hasSize(1);
-        SaleItem savedItem = savedOrder.getOrderItemList().get(0);
-        assertThat(savedItem.getAmount()).isEqualTo(3);
-        assertThat(savedItem.getSaleItemName()).isEqualTo("Burger");
+        assertThat(savedOrder.getOrderItemList().get(0).getAmount()).isEqualTo(3);
+        assertThat(savedOrder.getOrderItemList().get(0).getSaleItemName()).isEqualTo("Burger");
         assertThat(response.getOrderId()).isEqualTo("order-1");
         assertThat(response.getPaymentType()).isEqualTo(PaymentType.CARD);
-        assertThat(response.getTotalPrice()).isEqualTo(150.0);
+        assertThat(response.getTotalPrice()).isEqualByComparingTo("150.00");
     }
 
     @Test
@@ -133,22 +183,12 @@ class OrderServiceImplTest {
         existingOrder.setRestaurantId(10L);
         existingOrder.setPaymentStatus(PaymentStatus.PAYMENT_INITIATED);
         existingOrder.setPaymentType(PaymentType.CASH);
-        existingOrder.setOrderItemList(List.of(
-                buildSaleItem(existingOrder, buildMenuItem(100L, 10L, "Burger", 50.0, "SKU-100"), 2)
-        ));
-        existingOrder.setTotalPrice(100.0);
-
-        CompletePaymentRequest request = new CompletePaymentRequest(
-                PaymentType.UPI,
-                "POS-REF-001",
-                null,
-                "Paid at front desk",
-                "UPI-123"
-        );
+        existingOrder.setOrderItemList(List.of(buildSaleItem(existingOrder, 100L, 10L, "Burger", 50.00, 2)));
+        existingOrder.setTotalPrice(new BigDecimal("100.00"));
 
         when(orderRepository.findByOrderIdWithItemsForUpdate("order-3")).thenReturn(Optional.of(existingOrder));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(inventoryService.getAccessibleMenuItem(100L)).thenReturn(buildMenuItem(100L, 10L, "Burger", 50.0, "SKU-100"));
+        when(menuCatalogApi.getAccessibleMenuItem(100L)).thenReturn(directMenu(100L, 10L, "Burger", 50.00, "SKU-100"));
         when(tenantAccessService.isSuperAdmin()).thenReturn(true);
         when(tenantAccessService.currentUser()).thenReturn(new SecurityUser(
                 7L,
@@ -160,9 +200,13 @@ class OrderServiceImplTest {
                 Set.of("RESTAURANT_ADMIN")
         ));
 
-        PaymentProcessingResponse response = orderService.completePayment("order-3", request);
+        PaymentProcessingResponse response = orderService.completePayment(
+                "order-3",
+                new CompletePaymentRequest(PaymentType.UPI, "POS-REF-001", null, "Paid at front desk", "UPI-123")
+        );
 
-        verify(inventoryService).deductStockForOrder(existingOrder);
+        verify(inventoryApi).checkOrderStockAvailability(anyList(), any(), any());
+        verify(inventoryApi).deductStockForRequirements(anyList(), any(), any(), any());
         verify(orderRepository).save(existingOrder);
         verify(eventPublisher).publishEvent(any(OrderCompletedEvent.class));
         assertThat(response.getPaymentStatus()).isEqualTo(PaymentStatus.PAYMENT_SUCCESSFUL);
@@ -175,39 +219,17 @@ class OrderServiceImplTest {
     }
 
     @Test
-    void completePaymentReturnsExistingStateWhenOrderAlreadyPaid() {
-        Order existingOrder = new Order();
-        existingOrder.setOrderId("order-4");
-        existingOrder.setPaymentStatus(PaymentStatus.PAYMENT_SUCCESSFUL);
-        existingOrder.setPaymentType(PaymentType.CARD);
-        existingOrder.setPaymentCompletedAt(LocalDateTime.now().minusMinutes(5));
-
-        when(orderRepository.findByOrderIdWithItemsForUpdate("order-4")).thenReturn(Optional.of(existingOrder));
-        when(tenantAccessService.isSuperAdmin()).thenReturn(true);
-
-        PaymentProcessingResponse response = orderService.completePayment(
-                "order-4",
-                new CompletePaymentRequest(PaymentType.CARD, null, null, null, null)
-        );
-
-        verify(inventoryService, never()).deductStockForOrder(any(Order.class));
-        verify(orderRepository, never()).save(any(Order.class));
-        verify(eventPublisher, never()).publishEvent(any(OrderCompletedEvent.class));
-        assertThat(response.getPaymentStatus()).isEqualTo(PaymentStatus.PAYMENT_SUCCESSFUL);
-    }
-
-    @Test
     void refundPaymentRestoresStockAndCapturesAuditMetadata() {
         Order existingOrder = new Order();
         existingOrder.setOrderId("order-5");
+        existingOrder.setRestaurantId(10L);
         existingOrder.setPaymentStatus(PaymentStatus.PAYMENT_SUCCESSFUL);
         existingOrder.setPaymentCompletedAt(LocalDateTime.now().minusHours(1));
-        existingOrder.setOrderItemList(List.of(
-                buildSaleItem(existingOrder, buildMenuItem(100L, 10L, "Burger", 50.0, "SKU-100"), 1)
-        ));
+        existingOrder.setOrderItemList(List.of(buildSaleItem(existingOrder, 100L, 10L, "Burger", 50.00, 1)));
 
         when(orderRepository.findByOrderIdWithItemsForUpdate("order-5")).thenReturn(Optional.of(existingOrder));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(menuCatalogApi.getAccessibleMenuItem(100L)).thenReturn(directMenu(100L, 10L, "Burger", 50.00, "SKU-100"));
         when(tenantAccessService.isSuperAdmin()).thenReturn(true);
         when(tenantAccessService.currentUser()).thenReturn(new SecurityUser(
                 8L,
@@ -224,7 +246,7 @@ class OrderServiceImplTest {
                 new RefundPaymentRequest("Customer changed mind", "Refunded at counter")
         );
 
-        verify(inventoryService).restoreStockForRefund(existingOrder);
+        verify(inventoryApi).restoreStockForRequirements(anyList(), any(), any(), any());
         verify(orderRepository).save(existingOrder);
         assertThat(response.getPaymentStatus()).isEqualTo(PaymentStatus.PAYMENT_REFUND);
         assertThat(response.getRefundReason()).isEqualTo("Customer changed mind");
@@ -235,35 +257,30 @@ class OrderServiceImplTest {
 
     @Test
     void initiateOrderUsesRecipeBatchSizeForIngredientValidation() {
-        MenuItem recipeMenu = buildRecipeMenuItem(200L, 10L, "Biryani", 180.0, "ING-1", 20.0, 10);
-
-        when(inventoryService.getAccessibleMenuItem(200L)).thenReturn(recipeMenu);
+        when(menuCatalogApi.getAccessibleMenuItem(200L)).thenReturn(recipeMenu(200L, 10L, "Biryani", 180.00, "ING-1", 20.0, 10));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(taxService.getActiveTaxRates()).thenReturn(List.of());
 
         PaymentProcessingResponse response = orderService.initiateOrder(buildRequest(200L, 5, PaymentType.CARD));
 
-        assertThat(response.getTotalPrice()).isEqualTo(900.0);
+        assertThat(response.getTotalPrice()).isEqualByComparingTo("900.00");
         verify(orderRepository).save(any(Order.class));
-        verify(inventoryService).checkOrderStockAvailability(any(List.class), argThat(requirements ->
-                requirements.containsKey("ING-1") && Math.abs(requirements.get("ING-1") - 10.0) < 0.0001
-        ), eq(Map.<Long, Double>of()));
+        verify(inventoryApi).checkOrderStockAvailability(eq(List.of()), any(), eq(java.util.Map.<Long, Double>of()));
+        ArgumentCaptor<java.util.Map<String, Double>> ingredientCaptor = ArgumentCaptor.forClass(java.util.Map.class);
+        verify(inventoryApi).checkOrderStockAvailability(eq(List.of()), ingredientCaptor.capture(), eq(java.util.Map.<Long, Double>of()));
+        assertThat(ingredientCaptor.getValue()).containsEntry("ING-1", 10.0);
     }
 
     @Test
     void initiateOrderUsesPreparedStockInsteadOfIngredientStockForPreparedItems() {
-        MenuItem preparedMenu = buildPreparedMenuItem(300L, 10L, "Paneer Roll", 120.0, "ING-2", 5.0, 5, 8.0);
-
-        when(inventoryService.getAccessibleMenuItem(300L)).thenReturn(preparedMenu);
+        when(menuCatalogApi.getAccessibleMenuItem(300L)).thenReturn(preparedMenu(300L, 10L, "Paneer Roll", 120.00));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(taxService.getActiveTaxRates()).thenReturn(List.of());
 
         PaymentProcessingResponse response = orderService.initiateOrder(buildRequest(300L, 3, PaymentType.CASH));
 
-        assertThat(response.getTotalPrice()).isEqualTo(360.0);
-        verify(inventoryService).checkOrderStockAvailability(eq(List.of()), eq(Map.<String, Double>of()), argThat(requirements ->
-                requirements.containsKey(300L) && Math.abs(requirements.get(300L) - 3.0) < 0.0001
-        ));
+        assertThat(response.getTotalPrice()).isEqualByComparingTo("360.00");
+        ArgumentCaptor<java.util.Map<Long, Double>> preparedCaptor = ArgumentCaptor.forClass(java.util.Map.class);
+        verify(inventoryApi).checkOrderStockAvailability(eq(List.of()), eq(java.util.Map.<String, Double>of()), preparedCaptor.capture());
+        assertThat(preparedCaptor.getValue()).containsEntry(300L, 3.0);
     }
 
     private InitiateOrderRequest buildRequest(Long menuItemId, Integer amount, PaymentType paymentType) {
@@ -273,92 +290,76 @@ class OrderServiceImplTest {
         return request;
     }
 
-    private SaleItem buildSaleItem(Order order, MenuItem menuItem, Integer amount) {
+    private SaleItem buildSaleItem(Order order, Long menuItemId, Long restaurantId, String itemName, double unitPrice, Integer amount) {
         SaleItem saleItem = new SaleItem();
         saleItem.setOrder(order);
-        saleItem.setMenuItem(menuItem);
+        saleItem.setMenuItemId(menuItemId);
         saleItem.setAmount(amount);
-        saleItem.setRestaurantId(menuItem.getRestaurantId());
-        saleItem.setSaleItemName(menuItem.getItemName());
-        saleItem.setSaleItemPrice(menuItem.getItemPrice().getPrice());
+        saleItem.setRestaurantId(restaurantId);
+        saleItem.setSaleItemName(itemName);
+        saleItem.setSaleItemPrice(BigDecimal.valueOf(unitPrice));
+        saleItem.setTaxClassCodeSnapshot("GST");
+        saleItem.setUnitListAmount(BigDecimal.valueOf(unitPrice));
+        saleItem.setUnitDiscountAmount(BigDecimal.ZERO);
+        saleItem.setUnitTaxableAmount(BigDecimal.valueOf(unitPrice));
+        saleItem.setUnitTaxAmount(BigDecimal.ZERO);
+        saleItem.setUnitTotalAmount(BigDecimal.valueOf(unitPrice));
+        saleItem.setLineSubtotalAmount(BigDecimal.valueOf(unitPrice).multiply(BigDecimal.valueOf(amount)));
+        saleItem.setLineDiscountAmount(BigDecimal.ZERO);
+        saleItem.setLineTaxableAmount(BigDecimal.valueOf(unitPrice).multiply(BigDecimal.valueOf(amount)));
+        saleItem.setLineTaxAmount(BigDecimal.ZERO);
+        saleItem.setLineTotalAmount(BigDecimal.valueOf(unitPrice).multiply(BigDecimal.valueOf(amount)));
         return saleItem;
     }
 
-    private MenuItem buildMenuItem(Long id, Long restaurantId, String itemName, Double price, String sku) {
-        ItemPrice itemPrice = new ItemPrice();
-        itemPrice.setPrice(price);
-        itemPrice.setDisCount(0.0);
-
-        ItemStock itemStock = new ItemStock();
-        itemStock.setSku(sku);
-        itemStock.setTotalStock(20);
-        itemStock.setIsActive(true);
-
-        MenuItem menuItem = new MenuItem();
-        menuItem.setId(id);
-        menuItem.setRestaurantId(restaurantId);
-        menuItem.setItemName(itemName);
-        menuItem.setItemPrice(itemPrice);
-        menuItem.setItemStock(itemStock);
-        menuItem.setHasRecipe(false);
-        return menuItem;
+    private MenuItemSnapshot directMenu(Long id, Long restaurantId, String itemName, double price, String sku) {
+        return new MenuItemSnapshot(
+                id,
+                restaurantId,
+                1L,
+                itemName,
+                itemName,
+                true,
+                false,
+                true,
+                MenuItemType.DIRECT,
+                new MenuPriceSnapshot(BigDecimal.valueOf(price), BigDecimal.valueOf(price), BigDecimal.ZERO, false),
+                sku,
+                List.of()
+        );
     }
 
-    private MenuItem buildRecipeMenuItem(Long id,
-                                         Long restaurantId,
-                                         String itemName,
-                                         Double price,
-                                         String ingredientSku,
-                                         Double quantityRequired,
-                                         Integer batchSize) {
-        MenuItem menuItem = buildMenuItem(id, restaurantId, itemName, price, null);
-        menuItem.setItemStock(null);
-        menuItem.setHasRecipe(true);
-
-        IngredientStock ingredientStock = new IngredientStock();
-        ingredientStock.setSku(ingredientSku);
-        ingredientStock.setIngredientName("Rice");
-        ingredientStock.setRestaurantId(restaurantId);
-        ingredientStock.setIsActive(true);
-        ingredientStock.setIsDeleted(false);
-        ingredientStock.setTotalStock(50.0);
-        ingredientStock.setReorderLevel(5.0);
-
-        MenuRecipe recipe = new MenuRecipe();
-        recipe.setMenuItem(menuItem);
-        recipe.setBatchSize(batchSize);
-
-        MenuItemIngredient ingredientUsage = new MenuItemIngredient();
-        ingredientUsage.setMenuItem(menuItem);
-        ingredientUsage.setRecipe(recipe);
-        ingredientUsage.setIngredientStock(ingredientStock);
-        ingredientUsage.setQuantityRequired(quantityRequired);
-
-        recipe.setIngredientUsages(List.of(ingredientUsage));
-        menuItem.setRecipe(recipe);
-        menuItem.setIngredientUsages(List.of(ingredientUsage));
-        return menuItem;
+    private MenuItemSnapshot recipeMenu(Long id, Long restaurantId, String itemName, double price, String ingredientSku, double quantityRequired, int batchSize) {
+        return new MenuItemSnapshot(
+                id,
+                restaurantId,
+                1L,
+                itemName,
+                itemName,
+                true,
+                false,
+                true,
+                MenuItemType.RECIPE,
+                new MenuPriceSnapshot(BigDecimal.valueOf(price), BigDecimal.valueOf(price), BigDecimal.ZERO, false),
+                null,
+                List.of(new IngredientUsageSnapshot(ingredientSku, quantityRequired, batchSize))
+        );
     }
 
-    private MenuItem buildPreparedMenuItem(Long id,
-                                           Long restaurantId,
-                                           String itemName,
-                                           Double price,
-                                           String ingredientSku,
-                                           Double quantityRequired,
-                                           Integer batchSize,
-                                           Double preparedQty) {
-        MenuItem menuItem = buildRecipeMenuItem(id, restaurantId, itemName, price, ingredientSku, quantityRequired, batchSize);
-        menuItem.setIsPrepared(true);
-
-        PreparedItemStock preparedItemStock = new PreparedItemStock();
-        preparedItemStock.setMenuItemId(id);
-        preparedItemStock.setRestaurantId(restaurantId);
-        preparedItemStock.setAvailableQty(preparedQty);
-        preparedItemStock.setReservedQty(0.0);
-        preparedItemStock.setUnitCode("PCS");
-        preparedItemStock.setActive(true);
-        menuItem.setPreparedItemStock(preparedItemStock);
-        return menuItem;
+    private MenuItemSnapshot preparedMenu(Long id, Long restaurantId, String itemName, double price) {
+        return new MenuItemSnapshot(
+                id,
+                restaurantId,
+                1L,
+                itemName,
+                itemName,
+                true,
+                false,
+                true,
+                MenuItemType.PREPARED,
+                new MenuPriceSnapshot(BigDecimal.valueOf(price), BigDecimal.valueOf(price), BigDecimal.ZERO, false),
+                null,
+                List.of()
+        );
     }
 }

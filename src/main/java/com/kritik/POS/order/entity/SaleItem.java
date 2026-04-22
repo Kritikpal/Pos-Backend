@@ -1,11 +1,19 @@
 package com.kritik.POS.order.entity;
 
-import com.kritik.POS.restaurant.entity.MenuItem;
-import jakarta.persistence.*;
-import lombok.Data;
-
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import lombok.Data;
 
 @Data
 @Entity
@@ -69,9 +77,8 @@ public class SaleItem {
     @JoinColumn(nullable = false,updatable = false)
     private Order order;
 
-    @ManyToOne
-    @JoinColumn(name = "manu_itemId")
-    private MenuItem menuItem;
+    @Column(name = "menu_item_id")
+    private Long menuItemId;
 
     @Column(nullable = false)
     private boolean isActive = true;

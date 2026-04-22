@@ -71,7 +71,7 @@ public interface PreparedItemStockRepository extends JpaRepository<PreparedItemS
                    sum(si.amount) as quantity
             from SaleItem si
             join si.order o
-            join si.menuItem m
+            join MenuItem m
             join PreparedItemStock ps on ps.menuItemId = m.id
             where o.orderId = :orderId
               and o.isDeleted = false

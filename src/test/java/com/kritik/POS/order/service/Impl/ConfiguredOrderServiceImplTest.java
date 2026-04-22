@@ -1,23 +1,40 @@
 package com.kritik.POS.order.service.Impl;
 
-import com.kritik.POS.configuredmenu.entity.ConfiguredMenuOption;
-import com.kritik.POS.configuredmenu.entity.ConfiguredMenuSlot;
-import com.kritik.POS.configuredmenu.entity.ConfiguredMenuTemplate;
-import com.kritik.POS.configuredmenu.repository.ConfiguredMenuTemplateRepository;
-import com.kritik.POS.inventory.entity.stock.ItemStock;
-import com.kritik.POS.inventory.service.InventoryService;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.kritik.POS.common.util.MoneyUtils;
+import com.kritik.POS.configuredmenu.api.ConfiguredMenuApi;
+import com.kritik.POS.configuredmenu.api.ConfiguredMenuOptionSnapshot;
+import com.kritik.POS.configuredmenu.api.ConfiguredMenuSlotSnapshot;
+import com.kritik.POS.configuredmenu.api.ConfiguredMenuTemplateSnapshot;
+import com.kritik.POS.exception.errors.AppException;
+import com.kritik.POS.inventory.api.InventoryApi;
+import com.kritik.POS.inventory.api.StockRequest;
 import com.kritik.POS.order.entity.ConfiguredSaleItem;
 import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.model.request.ConfiguredOrderInitiateRequest;
 import com.kritik.POS.order.model.response.ConfiguredOrderResponse;
 import com.kritik.POS.order.repository.ConfiguredSaleItemRepository;
 import com.kritik.POS.order.repository.OrderRepository;
-import com.kritik.POS.restaurant.entity.ItemPrice;
-import com.kritik.POS.restaurant.entity.MenuItem;
-import com.kritik.POS.restaurant.entity.enums.MenuType;
-import com.kritik.POS.restaurant.models.request.StockRequest;
+import com.kritik.POS.order.service.OrderPricingService;
+import com.kritik.POS.restaurant.api.MenuCatalogApi;
+import com.kritik.POS.restaurant.api.MenuItemSnapshot;
+import com.kritik.POS.restaurant.api.MenuItemType;
+import com.kritik.POS.restaurant.api.MenuPriceSnapshot;
 import com.kritik.POS.security.service.TenantAccessService;
-import com.kritik.POS.tax.service.TaxService;
+import com.kritik.POS.tax.api.TaxApi;
+import com.kritik.POS.tax.api.TaxClassSnapshot;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -25,17 +42,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ConfiguredOrderServiceImplTest {
@@ -47,13 +53,19 @@ class ConfiguredOrderServiceImplTest {
     private ConfiguredSaleItemRepository configuredSaleItemRepository;
 
     @Mock
-    private ConfiguredMenuTemplateRepository configuredMenuTemplateRepository;
+    private ConfiguredMenuApi configuredMenuApi;
 
     @Mock
-    private InventoryService inventoryService;
+    private MenuCatalogApi menuCatalogApi;
 
     @Mock
-    private TaxService taxService;
+    private InventoryApi inventoryApi;
+
+    @Mock
+    private TaxApi taxApi;
+
+    @Mock
+    private OrderPricingService orderPricingService;
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
@@ -64,43 +76,67 @@ class ConfiguredOrderServiceImplTest {
     @InjectMocks
     private ConfiguredOrderServiceImpl configuredOrderService;
 
+    @BeforeEach
+    void setUp() {
+        when(taxApi.resolveTaxClass(any(), any())).thenReturn(new TaxClassSnapshot(1L, 101L, "GST", false));
+        doAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            @SuppressWarnings("unchecked")
+            List<OrderPricingService.LinePricingPlan> plans = invocation.getArgument(2);
+            BigDecimal total = BigDecimal.ZERO;
+
+            for (OrderPricingService.LinePricingPlan plan : plans) {
+                BigDecimal lineTotal = plan.lineSubtotalAmount().subtract(plan.lineDiscountAmount());
+                total = total.add(lineTotal);
+                if (plan.configuredSaleItem() != null) {
+                    ConfiguredSaleItem item = plan.configuredSaleItem();
+                    item.setTaxClassCodeSnapshot(plan.taxClassCodeSnapshot());
+                    item.setPriceIncludesTax(plan.priceIncludesTax());
+                    item.setUnitListAmount(plan.unitListAmount());
+                    item.setUnitDiscountAmount(plan.unitDiscountAmount());
+                    item.setUnitTaxableAmount(item.getUnitPrice());
+                    item.setUnitTaxAmount(BigDecimal.ZERO);
+                    item.setUnitTotalAmount(item.getUnitPrice());
+                    item.setLineSubtotalAmount(plan.lineSubtotalAmount());
+                    item.setLineDiscountAmount(plan.lineDiscountAmount());
+                    item.setLineTaxableAmount(lineTotal);
+                    item.setLineTaxAmount(BigDecimal.ZERO);
+                    item.setLineTotalAmount(lineTotal);
+                }
+            }
+
+            order.setSubtotalAmount(total);
+            order.setDiscountAmount(BigDecimal.ZERO);
+            order.setTaxableAmount(total);
+            order.setTaxAmount(BigDecimal.ZERO);
+            order.setFeeAmount(BigDecimal.ZERO);
+            order.setRoundingAmount(BigDecimal.ZERO);
+            order.setGrandTotal(total);
+            order.setTotalPrice(total);
+            return null;
+        }).when(orderPricingService).applyPricing(any(Order.class), any(), anyList(), any());
+    }
+
     @Test
     void initiateOrderAppliesPriceDeltaOnlyAboveMinimumQuantityForConfiguredOrders() {
-        MenuItem parent = menuItem(10L, 101L, "Thali", MenuType.CONFIGURABLE, 180.0, null);
-        MenuItem roti = menuItem(20L, 101L, "Roti", MenuType.DIRECT, 0.0, "ROTI-SKU");
-        MenuItem naan = menuItem(21L, 101L, "Naan", MenuType.DIRECT, 0.0, "NAAN-SKU");
-        ConfiguredMenuTemplate template = quantityTemplate(parent, roti, naan);
-
         List<ConfiguredSaleItem> persistedItems = new ArrayList<>();
-        when(configuredMenuTemplateRepository.findById(700L)).thenReturn(Optional.of(template));
-        when(inventoryService.getAccessibleMenuItem(20L)).thenReturn(roti);
-        when(inventoryService.getAccessibleMenuItem(21L)).thenReturn(naan);
-        when(taxService.getActiveTaxRates()).thenReturn(List.of());
-        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
-            Order order = invocation.getArgument(0);
-            order.setId(901L);
-            return order;
-        });
-        when(configuredSaleItemRepository.saveAll(any())).thenAnswer(invocation -> {
-            @SuppressWarnings("unchecked")
-            List<ConfiguredSaleItem> items = invocation.getArgument(0);
-            persistedItems.clear();
-            persistedItems.addAll(items);
-            return items;
-        });
-        when(configuredSaleItemRepository.findAllByOrder_IdOrderByIdAsc(901L)).thenAnswer(invocation -> persistedItems);
+        stubConfiguredPersistence(persistedItems, 901L);
+
+        when(configuredMenuApi.getAccessibleActiveTemplate(700L)).thenReturn(quantityTemplate());
+        when(menuCatalogApi.getAccessibleMenuItem(20L)).thenReturn(directMenu(20L, "Roti", "ROTI-SKU"));
+        when(menuCatalogApi.getAccessibleMenuItem(21L)).thenReturn(directMenu(21L, "Naan", "NAAN-SKU"));
 
         ConfiguredOrderResponse response = configuredOrderService.initiateOrder(request());
 
         assertThat(response.getItems()).hasSize(1);
-        assertThat(response.getItems().get(0).unitPrice()).isEqualTo(200.0);
-        assertThat(response.getItems().get(0).lineTotal()).isEqualTo(200.0);
+        assertThat(response.getItems().get(0).unitPrice()).isEqualByComparingTo("200.00");
+        assertThat(response.getItems().get(0).lineTotal()).isEqualByComparingTo("200.00");
         assertThat(response.getItems().get(0).items())
                 .extracting(item -> item.quantity())
                 .containsExactlyInAnyOrder(3, 1);
 
         ArgumentCaptor<List<StockRequest>> stockCaptor = ArgumentCaptor.forClass(List.class);
-        verify(inventoryService).checkOrderStockAvailability(stockCaptor.capture(), any(), any());
+        verify(inventoryApi).checkOrderStockAvailability(stockCaptor.capture(), any(), any());
         assertThat(stockCaptor.getValue())
                 .extracting(StockRequest::sku, StockRequest::amount)
                 .containsExactlyInAnyOrder(
@@ -111,36 +147,18 @@ class ConfiguredOrderServiceImplTest {
 
     @Test
     void initiateOrderSupportsExactOneAndMixableSelectionSlotsForConfiguredOrders() {
-        MenuItem parent = menuItem(10L, 101L, "Thali", MenuType.CONFIGURABLE, 180.0, null);
-        MenuItem rice = menuItem(30L, 101L, "Rice", MenuType.DIRECT, 0.0, "RICE-SKU");
-        MenuItem roti = menuItem(20L, 101L, "Roti", MenuType.DIRECT, 0.0, "ROTI-SKU");
-        MenuItem naan = menuItem(21L, 101L, "Naan", MenuType.DIRECT, 0.0, "NAAN-SKU");
-        ConfiguredMenuTemplate template = mixedTemplate(parent, rice, roti, naan);
-
         List<ConfiguredSaleItem> persistedItems = new ArrayList<>();
-        when(configuredMenuTemplateRepository.findById(702L)).thenReturn(Optional.of(template));
-        when(inventoryService.getAccessibleMenuItem(30L)).thenReturn(rice);
-        when(inventoryService.getAccessibleMenuItem(20L)).thenReturn(roti);
-        when(inventoryService.getAccessibleMenuItem(21L)).thenReturn(naan);
-        when(taxService.getActiveTaxRates()).thenReturn(List.of());
-        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
-            Order order = invocation.getArgument(0);
-            order.setId(902L);
-            return order;
-        });
-        when(configuredSaleItemRepository.saveAll(any())).thenAnswer(invocation -> {
-            @SuppressWarnings("unchecked")
-            List<ConfiguredSaleItem> items = invocation.getArgument(0);
-            persistedItems.clear();
-            persistedItems.addAll(items);
-            return items;
-        });
-        when(configuredSaleItemRepository.findAllByOrder_IdOrderByIdAsc(902L)).thenAnswer(invocation -> persistedItems);
+        stubConfiguredPersistence(persistedItems, 902L);
+
+        when(configuredMenuApi.getAccessibleActiveTemplate(702L)).thenReturn(mixedTemplate());
+        when(menuCatalogApi.getAccessibleMenuItem(30L)).thenReturn(directMenu(30L, "Rice", "RICE-SKU"));
+        when(menuCatalogApi.getAccessibleMenuItem(20L)).thenReturn(directMenu(20L, "Roti", "ROTI-SKU"));
+        when(menuCatalogApi.getAccessibleMenuItem(21L)).thenReturn(directMenu(21L, "Naan", "NAAN-SKU"));
 
         ConfiguredOrderResponse response = configuredOrderService.initiateOrder(mixedRequest());
 
         assertThat(response.getItems()).hasSize(1);
-        assertThat(response.getItems().get(0).unitPrice()).isEqualTo(195.0);
+        assertThat(response.getItems().get(0).unitPrice()).isEqualByComparingTo("195.00");
         assertThat(response.getItems().get(0).items())
                 .extracting(item -> item.childItemName(), item -> item.quantity())
                 .containsExactlyInAnyOrder(
@@ -150,7 +168,7 @@ class ConfiguredOrderServiceImplTest {
                 );
 
         ArgumentCaptor<List<StockRequest>> stockCaptor = ArgumentCaptor.forClass(List.class);
-        verify(inventoryService).checkOrderStockAvailability(stockCaptor.capture(), any(), any());
+        verify(inventoryApi).checkOrderStockAvailability(stockCaptor.capture(), any(), any());
         assertThat(stockCaptor.getValue())
                 .extracting(StockRequest::sku, StockRequest::amount)
                 .containsExactlyInAnyOrder(
@@ -162,23 +180,20 @@ class ConfiguredOrderServiceImplTest {
 
     @Test
     void initiateOrderRejectsSelectedQuantityBelowConfiguredMinimum() {
-        MenuItem parent = menuItem(10L, 101L, "Thali", MenuType.CONFIGURABLE, 180.0, null);
-        MenuItem roti = menuItem(20L, 101L, "Roti", MenuType.DIRECT, 0.0, "ROTI-SKU");
-        MenuItem naan = menuItem(21L, 101L, "Naan", MenuType.DIRECT, 0.0, "NAAN-SKU");
-        ConfiguredMenuTemplate template = quantityTemplate(parent, roti, naan);
-
-        when(configuredMenuTemplateRepository.findById(700L)).thenReturn(Optional.of(template));
+        when(configuredMenuApi.getAccessibleActiveTemplate(700L)).thenReturn(quantityTemplate());
 
         ConfiguredOrderInitiateRequest request = new ConfiguredOrderInitiateRequest();
         request.setOrderItems(List.of(new ConfiguredOrderInitiateRequest.ConfiguredOrderItemRequest(
                 700L,
                 1,
-                List.of(new ConfiguredOrderInitiateRequest.SlotItemRequest(100L, List.of(
-                        new ConfiguredOrderInitiateRequest.SlotItemQuantityRequest(20L, 1)
-                )))
+                List.of(new ConfiguredOrderInitiateRequest.SlotItemRequest(
+                        100L,
+                        List.of(new ConfiguredOrderInitiateRequest.SlotItemQuantityRequest(20L, 1))
+                ))
         )));
 
         assertThatThrownBy(() -> configuredOrderService.initiateOrder(request))
+                .isInstanceOf(AppException.class)
                 .hasMessageContaining("Roti requires at least 2 quantity");
 
         verify(orderRepository, never()).save(any(Order.class));
@@ -186,14 +201,7 @@ class ConfiguredOrderServiceImplTest {
 
     @Test
     void initiateOrderRejectsTooManySelectedItemsForSlot() {
-        MenuItem parent = menuItem(10L, 101L, "Thali", MenuType.CONFIGURABLE, 180.0, null);
-        MenuItem rice = menuItem(30L, 101L, "Rice", MenuType.DIRECT, 0.0, "RICE-SKU");
-        MenuItem roti = menuItem(20L, 101L, "Roti", MenuType.DIRECT, 0.0, "ROTI-SKU");
-        MenuItem naan = menuItem(21L, 101L, "Naan", MenuType.DIRECT, 0.0, "NAAN-SKU");
-        ConfiguredMenuTemplate template = mixedTemplate(parent, rice, roti, naan);
-        template.getSlots().get(1).getOptions().add(option(template.getSlots().get(1), rice, 5.0, 2, 0));
-
-        when(configuredMenuTemplateRepository.findById(702L)).thenReturn(Optional.of(template));
+        when(configuredMenuApi.getAccessibleActiveTemplate(702L)).thenReturn(mixedTemplateWithExtraBreadChoice());
 
         ConfiguredOrderInitiateRequest request = new ConfiguredOrderInitiateRequest();
         request.setOrderItems(List.of(new ConfiguredOrderInitiateRequest.ConfiguredOrderItemRequest(
@@ -215,6 +223,22 @@ class ConfiguredOrderServiceImplTest {
                 .hasMessageContaining("allows at most 2 selections");
 
         verify(orderRepository, never()).save(any(Order.class));
+    }
+
+    private void stubConfiguredPersistence(List<ConfiguredSaleItem> persistedItems, Long orderId) {
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            order.setId(orderId);
+            return order;
+        });
+        when(configuredSaleItemRepository.saveAll(any())).thenAnswer(invocation -> {
+            @SuppressWarnings("unchecked")
+            List<ConfiguredSaleItem> items = invocation.getArgument(0);
+            persistedItems.clear();
+            persistedItems.addAll(items);
+            return items;
+        });
+        when(configuredSaleItemRepository.findAllByOrder_IdOrderByIdAsc(orderId)).thenAnswer(invocation -> persistedItems);
     }
 
     private ConfiguredOrderInitiateRequest request() {
@@ -248,101 +272,118 @@ class ConfiguredOrderServiceImplTest {
         return request;
     }
 
-    private ConfiguredMenuTemplate quantityTemplate(MenuItem parent, MenuItem roti, MenuItem naan) {
-        ConfiguredMenuTemplate template = new ConfiguredMenuTemplate();
-        template.setId(700L);
-        template.setParentMenuItem(parent);
-        template.setRestaurantId(parent.getRestaurantId());
-        template.setIsActive(true);
-        template.setIsDeleted(false);
-
-        ConfiguredMenuSlot slot = new ConfiguredMenuSlot();
-        slot.setId(100L);
-        slot.setTemplate(template);
-        slot.setSlotKey("breads");
-        slot.setSlotName("Breads");
-        slot.setMinSelections(1);
-        slot.setMaxSelections(2);
-        slot.setDisplayOrder(0);
-        slot.setIsRequired(true);
-        slot.getOptions().add(option(slot, roti, 10.0, 0, 2));
-        slot.getOptions().add(option(slot, naan, 10.0, 1, 0));
-        template.getSlots().add(slot);
-        return template;
+    private ConfiguredMenuTemplateSnapshot quantityTemplate() {
+        return new ConfiguredMenuTemplateSnapshot(
+                700L,
+                101L,
+                true,
+                configurableMenu(10L, "Thali", 180.00),
+                List.of(new ConfiguredMenuSlotSnapshot(
+                        100L,
+                        "breads",
+                        "Breads",
+                        1,
+                        2,
+                        true,
+                        List.of(
+                                new ConfiguredMenuOptionSnapshot(1L, 20L, "Roti", money(10.00), 2),
+                                new ConfiguredMenuOptionSnapshot(2L, 21L, "Naan", money(10.00), 0)
+                        )
+                ))
+        );
     }
 
-    private ConfiguredMenuTemplate mixedTemplate(MenuItem parent, MenuItem rice, MenuItem roti, MenuItem naan) {
-        ConfiguredMenuTemplate template = new ConfiguredMenuTemplate();
-        template.setId(702L);
-        template.setParentMenuItem(parent);
-        template.setRestaurantId(parent.getRestaurantId());
-        template.setIsActive(true);
-        template.setIsDeleted(false);
-
-        ConfiguredMenuSlot riceSlot = new ConfiguredMenuSlot();
-        riceSlot.setId(100L);
-        riceSlot.setTemplate(template);
-        riceSlot.setSlotKey("rice");
-        riceSlot.setSlotName("Rice");
-        riceSlot.setMinSelections(1);
-        riceSlot.setMaxSelections(1);
-        riceSlot.setDisplayOrder(0);
-        riceSlot.setIsRequired(true);
-        riceSlot.getOptions().add(option(riceSlot, rice, 5.0, 0, 1));
-
-        ConfiguredMenuSlot breadsSlot = new ConfiguredMenuSlot();
-        breadsSlot.setId(101L);
-        breadsSlot.setTemplate(template);
-        breadsSlot.setSlotKey("breads");
-        breadsSlot.setSlotName("Breads");
-        breadsSlot.setMinSelections(1);
-        breadsSlot.setMaxSelections(2);
-        breadsSlot.setDisplayOrder(1);
-        breadsSlot.setIsRequired(true);
-        breadsSlot.getOptions().add(option(breadsSlot, roti, 5.0, 0, 1));
-        breadsSlot.getOptions().add(option(breadsSlot, naan, 10.0, 1, 1));
-
-        template.getSlots().add(riceSlot);
-        template.getSlots().add(breadsSlot);
-        return template;
+    private ConfiguredMenuTemplateSnapshot mixedTemplate() {
+        return new ConfiguredMenuTemplateSnapshot(
+                702L,
+                101L,
+                true,
+                configurableMenu(10L, "Thali", 180.00),
+                List.of(
+                        new ConfiguredMenuSlotSnapshot(
+                                100L,
+                                "rice",
+                                "Rice",
+                                1,
+                                1,
+                                true,
+                                List.of(new ConfiguredMenuOptionSnapshot(1L, 30L, "Rice", money(5.00), 1))
+                        ),
+                        new ConfiguredMenuSlotSnapshot(
+                                101L,
+                                "breads",
+                                "Breads",
+                                1,
+                                2,
+                                true,
+                                List.of(
+                                        new ConfiguredMenuOptionSnapshot(2L, 20L, "Roti", money(5.00), 1),
+                                        new ConfiguredMenuOptionSnapshot(3L, 21L, "Naan", money(10.00), 1)
+                                )
+                        )
+                )
+        );
     }
 
-    private ConfiguredMenuOption option(ConfiguredMenuSlot slot,
-                                        MenuItem child,
-                                        Double delta,
-                                        Integer displayOrder,
-                                        Integer minQuantity) {
-        ConfiguredMenuOption option = new ConfiguredMenuOption();
-        option.setSlot(slot);
-        option.setChildMenuItem(child);
-        option.setPriceDelta(delta);
-        option.setDisplayOrder(displayOrder);
-        option.setIsDefault(false);
-        option.setMinQuantity(minQuantity);
-        return option;
+    private ConfiguredMenuTemplateSnapshot mixedTemplateWithExtraBreadChoice() {
+        ConfiguredMenuTemplateSnapshot base = mixedTemplate();
+        List<ConfiguredMenuOptionSnapshot> extraBreadOptions = new ArrayList<>(base.slots().get(1).options());
+        extraBreadOptions.add(new ConfiguredMenuOptionSnapshot(4L, 30L, "Rice", money(5.00), 0));
+        return new ConfiguredMenuTemplateSnapshot(
+                base.id(),
+                base.restaurantId(),
+                base.active(),
+                base.parentMenuItem(),
+                List.of(
+                        base.slots().get(0),
+                        new ConfiguredMenuSlotSnapshot(
+                                101L,
+                                "breads",
+                                "Breads",
+                                1,
+                                2,
+                                true,
+                                extraBreadOptions
+                        )
+                )
+        );
     }
 
-    private MenuItem menuItem(Long id, Long restaurantId, String name, MenuType type, Double price, String sku) {
-        MenuItem menuItem = new MenuItem();
-        menuItem.setId(id);
-        menuItem.setRestaurantId(restaurantId);
-        menuItem.setItemName(name);
-        menuItem.setMenuType(type);
-        ItemPrice itemPrice = new ItemPrice();
-        itemPrice.setPrice(price);
-        menuItem.setItemPrice(itemPrice);
-        if (sku != null) {
-            ItemStock itemStock = new ItemStock();
-            itemStock.setSku(sku);
-            itemStock.setMenuItem(menuItem);
-            itemStock.setRestaurantId(restaurantId);
-            itemStock.setTotalStock(100);
-            itemStock.setReorderLevel(0);
-            itemStock.setUnitOfMeasure("pcs");
-            itemStock.setIsActive(true);
-            itemStock.setIsDeleted(false);
-            menuItem.setItemStock(itemStock);
-        }
-        return menuItem;
+    private MenuItemSnapshot configurableMenu(Long id, String name, double price) {
+        return new MenuItemSnapshot(
+                id,
+                101L,
+                1L,
+                name,
+                name,
+                true,
+                false,
+                true,
+                MenuItemType.CONFIGURABLE,
+                new MenuPriceSnapshot(money(price), money(price), BigDecimal.ZERO, false),
+                null,
+                List.of()
+        );
+    }
+
+    private MenuItemSnapshot directMenu(Long id, String name, String sku) {
+        return new MenuItemSnapshot(
+                id,
+                101L,
+                1L,
+                name,
+                name,
+                true,
+                false,
+                true,
+                MenuItemType.DIRECT,
+                new MenuPriceSnapshot(BigDecimal.ZERO.setScale(MoneyUtils.MONEY_SCALE), BigDecimal.ZERO.setScale(MoneyUtils.MONEY_SCALE), BigDecimal.ZERO, false),
+                sku,
+                List.of()
+        );
+    }
+
+    private BigDecimal money(double value) {
+        return BigDecimal.valueOf(value).setScale(MoneyUtils.MONEY_SCALE, java.math.RoundingMode.HALF_UP);
     }
 }

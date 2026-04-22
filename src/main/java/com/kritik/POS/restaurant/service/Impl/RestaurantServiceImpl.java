@@ -4,8 +4,6 @@ import com.kritik.POS.common.model.PageResponse;
 import com.kritik.POS.common.service.FileUploadService;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.inventory.entity.stock.PreparedItemStock;
-import com.kritik.POS.order.entity.SaleItem;
-import com.kritik.POS.order.repository.SaleItemRepository;
 import com.kritik.POS.restaurant.dto.CategoryResponseDto;
 import com.kritik.POS.restaurant.dto.MenuItemResponseDto;
 import com.kritik.POS.restaurant.entity.Category;
@@ -57,7 +55,6 @@ public class RestaurantServiceImpl implements RestaurantService {
     private final MenuItemRepository menuItemRepository;
     private final RestaurantTableRepository tableRepository;
     private final CategoryRepository categoryRepository;
-    private final SaleItemRepository saleItemRepository;
     private final TaxRateRepository taxRateRepository;
     private final FileUploadService fileUploadService;
     private final TenantAccessService tenantAccessService;
@@ -145,8 +142,6 @@ public class RestaurantServiceImpl implements RestaurantService {
     @Override
     public boolean deleteMenuItem(Long menuItemId) throws AppException {
         MenuItem menuItem = getMenuItemEntity(menuItemId);
-        List<SaleItem> saleItems = menuItem.getSaleItems().stream().peek(saleItem -> saleItem.setMenuItem(null)).toList();
-        saleItemRepository.saveAll(saleItems);
         menuItem.setIsDeleted(true);
         menuItem.setIsActive(false);
         if (menuItem.getItemStock() != null) {

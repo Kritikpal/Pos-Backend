@@ -3,10 +3,10 @@ package com.kritik.POS.inventory.util;
 import com.kritik.POS.inventory.entity.enums.MenuStockStrategy;
 import com.kritik.POS.inventory.entity.stock.IngredientStock;
 import com.kritik.POS.inventory.entity.stock.PreparedItemStock;
+import com.kritik.POS.inventory.api.StockRequest;
 import com.kritik.POS.restaurant.entity.MenuItem;
 import com.kritik.POS.restaurant.entity.enums.MenuType;
 import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
-import com.kritik.POS.restaurant.models.request.StockRequest;
 
 import java.util.List;
 import java.util.Map;

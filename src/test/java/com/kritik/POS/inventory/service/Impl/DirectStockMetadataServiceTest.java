@@ -2,6 +2,8 @@ package com.kritik.POS.inventory.service.Impl;
 
 import com.kritik.POS.inventory.entity.stock.ItemStock;
 import com.kritik.POS.inventory.models.request.ItemStockUpsertRequest;
+import com.kritik.POS.inventory.models.request.StockUpdateRequest;
+import com.kritik.POS.inventory.models.response.StockResponse;
 import com.kritik.POS.inventory.repository.IngredientStockRepository;
 import com.kritik.POS.inventory.repository.MenuItemIngredientRepository;
 import com.kritik.POS.inventory.repository.PreparedItemStockRepository;
@@ -11,8 +13,6 @@ import com.kritik.POS.order.repository.SaleItemRepository;
 import com.kritik.POS.restaurant.entity.Category;
 import com.kritik.POS.restaurant.entity.MenuItem;
 import com.kritik.POS.restaurant.entity.enums.MenuType;
-import com.kritik.POS.restaurant.models.request.StockUpdateRequest;
-import com.kritik.POS.restaurant.models.response.StockResponse;
 import com.kritik.POS.restaurant.repository.MenuItemRepository;
 import com.kritik.POS.security.service.TenantAccessService;
 import org.junit.jupiter.api.Test;

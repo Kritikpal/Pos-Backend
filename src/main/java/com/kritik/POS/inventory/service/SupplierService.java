@@ -1,9 +1,9 @@
 package com.kritik.POS.inventory.service;
 
 import com.kritik.POS.common.model.PageResponse;
+import com.kritik.POS.inventory.models.request.SupplierRequest;
+import com.kritik.POS.inventory.models.response.SupplierResponse;
 import com.kritik.POS.inventory.models.response.SupplierResponseDto;
-import com.kritik.POS.restaurant.models.request.SupplierRequest;
-import com.kritik.POS.restaurant.models.response.SupplierResponse;
 import jakarta.transaction.Transactional;
 
 import java.util.List;

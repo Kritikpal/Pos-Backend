@@ -5,7 +5,6 @@ import com.kritik.POS.inventory.entity.stock.ItemStock;
 import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
 import com.kritik.POS.inventory.entity.recipi.MenuRecipe;
 import com.kritik.POS.inventory.entity.stock.PreparedItemStock;
-import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.restaurant.entity.enums.MenuType;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -75,12 +74,6 @@ public class MenuItem {
     @Enumerated(EnumType.STRING)
     @Column(name = "menu_type", nullable = false, length = 30)
     private MenuType menuType = MenuType.DIRECT;
-
-    @OneToMany(mappedBy = "menuItem")
-    @JsonIgnore
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    private List<SaleItem> saleItems;
 
     @OneToOne(mappedBy = "menuItem", cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(nullable = false)

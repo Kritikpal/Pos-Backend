@@ -42,7 +42,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("""
             SELECT DISTINCT o FROM Order o
             LEFT JOIN FETCH o.orderItemList oi
-            LEFT JOIN FETCH oi.menuItem
             WHERE o.orderId = :orderId
               AND o.isDeleted = false
             """)
@@ -52,7 +51,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
     @Query("""
             SELECT DISTINCT o FROM Order o
             LEFT JOIN FETCH o.orderItemList oi
-            LEFT JOIN FETCH oi.menuItem
             WHERE o.orderId = :orderId
               AND o.isDeleted = false
             """)

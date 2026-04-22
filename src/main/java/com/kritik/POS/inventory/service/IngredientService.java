@@ -1,9 +1,9 @@
 package com.kritik.POS.inventory.service;
 
 import com.kritik.POS.common.model.PageResponse;
+import com.kritik.POS.inventory.models.request.IngredientRequest;
+import com.kritik.POS.inventory.models.response.IngredientResponse;
 import com.kritik.POS.inventory.projection.IngredientStockListProjection;
-import com.kritik.POS.restaurant.models.request.IngredientRequest;
-import com.kritik.POS.restaurant.models.response.IngredientResponse;
 import jakarta.transaction.Transactional;
 
 public interface IngredientService {

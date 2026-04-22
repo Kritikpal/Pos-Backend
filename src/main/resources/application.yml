@@ -1,26 +1,33 @@
 spring:
   application:
     name: point-of-sale
+  modulith:
+    detection-strategy: explicitly-annotated
+
   datasource:
     url: jdbc:postgresql://localhost:5432/db_pos
-    username: postgres
-    password: root
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:root}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: create
     open-in-view: false
   mail:
     host: smtp.gmail.com
     port: 587
-    username: kritikpal123@gmail.com
-    password: fqzh mhov ldck lyxm
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true
 
 app:
-  gpt-api-key: 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
+  gpt-api-key: ${GPT_API_KEY:}
+  email:
+    login-url: ${APP_EMAIL_LOGIN_URL:http://localhost:3000/login}
+    password-reset-url: ${APP_EMAIL_PASSWORD_RESET_URL:http://localhost:8080/reset-password}
+    from-name: ${APP_EMAIL_FROM_NAME:POS Support}
   jwt:
     secret: ${JWT_SECRET:change-this-secret-key-to-at-least-32-characters}
     issuer: pos-backend
@@ -31,7 +38,6 @@ app:
   superadmin:
     email: yourgmail@gmail.com
     password: Your@123
-  login-url: http://localhost:3000/login
 
 
 springdoc:

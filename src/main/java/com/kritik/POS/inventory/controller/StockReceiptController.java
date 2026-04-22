@@ -2,12 +2,12 @@ package com.kritik.POS.inventory.controller;
 
 import com.kritik.POS.common.model.ApiResponse;
 import com.kritik.POS.common.model.PageResponse;
+import com.kritik.POS.inventory.models.request.StockReceiptCreateRequest;
+import com.kritik.POS.inventory.models.response.StockReceiptResponse;
 import com.kritik.POS.inventory.models.response.StockReceiptSkuOptionDto;
 import com.kritik.POS.inventory.models.response.StockReceiptResponseDto;
 import com.kritik.POS.inventory.route.InventoryRoute;
 import com.kritik.POS.inventory.service.ReceiptService;
-import com.kritik.POS.restaurant.models.request.StockReceiptCreateRequest;
-import com.kritik.POS.restaurant.models.response.StockReceiptResponse;
 import com.kritik.POS.swagger.SwaggerTags;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

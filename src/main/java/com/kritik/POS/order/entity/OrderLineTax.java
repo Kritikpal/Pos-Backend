@@ -1,8 +1,8 @@
 package com.kritik.POS.order.entity;
 
-import com.kritik.POS.tax.entity.enums.TaxCalculationMode;
-import com.kritik.POS.tax.entity.enums.TaxCompoundMode;
-import com.kritik.POS.tax.entity.enums.TaxValueType;
+import com.kritik.POS.tax.api.TaxCalculationMode;
+import com.kritik.POS.tax.api.TaxCompoundMode;
+import com.kritik.POS.tax.api.TaxValueType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

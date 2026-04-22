@@ -1,10 +1,10 @@
 package com.kritik.POS.order.service.Impl;
 
-import com.kritik.POS.events.OrderCompletedEvent;
-import com.kritik.POS.inventory.service.InventoryService;
+import com.kritik.POS.common.util.MoneyUtils;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.exception.errors.OrderException;
-import com.kritik.POS.inventory.util.InventoryUtil;
+import com.kritik.POS.inventory.api.InventoryApi;
+import com.kritik.POS.order.api.OrderCompletedEvent;
 import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
@@ -13,40 +13,37 @@ import com.kritik.POS.order.model.request.CompletePaymentRequest;
 import com.kritik.POS.order.model.request.InitiateOrderRequest;
 import com.kritik.POS.order.model.request.RefundPaymentRequest;
 import com.kritik.POS.order.model.response.PaymentProcessingResponse;
-import com.kritik.POS.order.service.OrderPricingService;
 import com.kritik.POS.order.repository.OrderRepository;
+import com.kritik.POS.order.service.OrderPricingService;
 import com.kritik.POS.order.service.OrderService;
-import com.kritik.POS.restaurant.entity.MenuItem;
-import com.kritik.POS.restaurant.models.request.StockRequest;
-import com.kritik.POS.inventory.util.InventoryAvailabilityUtil;
-import com.kritik.POS.restaurant.util.RestaurantUtil;
+import com.kritik.POS.order.service.internal.OrderMenuSupport;
+import com.kritik.POS.order.service.internal.OrderStockDemand;
+import com.kritik.POS.restaurant.api.MenuCatalogApi;
+import com.kritik.POS.restaurant.api.MenuItemSnapshot;
 import com.kritik.POS.security.models.SecurityUser;
 import com.kritik.POS.security.service.TenantAccessService;
-import com.kritik.POS.tax.entity.TaxClass;
-import com.kritik.POS.tax.model.TaxableChargeComponent;
-import com.kritik.POS.tax.service.TaxService;
-import com.kritik.POS.tax.util.MoneyUtils;
+import com.kritik.POS.tax.api.TaxApi;
+import com.kritik.POS.tax.api.TaxClassSnapshot;
+import com.kritik.POS.tax.api.TaxableChargeComponent;
 import jakarta.transaction.Transactional;
+import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-
 @Service
 @RequiredArgsConstructor
 public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
-    private final InventoryService inventoryService;
-    private final TaxService taxService;
+    private final MenuCatalogApi menuCatalogApi;
+    private final InventoryApi inventoryApi;
+    private final TaxApi taxApi;
     private final OrderPricingService orderPricingService;
     private final ApplicationEventPublisher eventPublisher;
     private final TenantAccessService tenantAccessService;
@@ -117,8 +114,19 @@ public class OrderServiceImpl implements OrderService {
         if (!order.getPaymentStatus().equals(PaymentStatus.PAYMENT_INITIATED)) {
             throw new OrderException("Payment cannot be completed in the current state");
         }
-        validateCurrentOrderStock(order);
-        inventoryService.deductStockForOrder(order);
+
+        OrderStockDemand demand = buildPersistedStockDemand(order);
+        inventoryApi.checkOrderStockAvailability(
+                demand.stockRequests(),
+                demand.ingredientRequirements(),
+                demand.preparedRequirements()
+        );
+        inventoryApi.deductStockForRequirements(
+                demand.stockRequests(),
+                demand.ingredientRequirements(),
+                demand.preparedRequirements(),
+                demand.affectedMenuIds()
+        );
 
         PaymentType paymentType = request == null ? null : request.getPaymentType();
         order.setPaymentStatus(PaymentStatus.PAYMENT_SUCCESSFUL);
@@ -156,7 +164,13 @@ public class OrderServiceImpl implements OrderService {
             throw new OrderException("Can't complete the refund");
         }
 
-        inventoryService.restoreStockForRefund(order);
+        OrderStockDemand demand = buildPersistedStockDemand(order);
+        inventoryApi.restoreStockForRequirements(
+                demand.stockRequests(),
+                demand.ingredientRequirements(),
+                demand.preparedRequirements(),
+                demand.affectedMenuIds()
+        );
         order.setPaymentStatus(PaymentStatus.PAYMENT_REFUND);
         order.setRefundedAt(LocalDateTime.now());
         applyRefundAudit(order, request);
@@ -170,60 +184,52 @@ public class OrderServiceImpl implements OrderService {
 
     private void rebuildOrder(Order order, InitiateOrderRequest initiateOrderRequest) {
         List<SaleItem> saleItemList = new ArrayList<>();
-        List<StockRequest> stockRequestList = new ArrayList<>();
-        Map<String, Double> ingredientRequirements = new HashMap<>();
-        Map<Long, Double> preparedRequirements = new HashMap<>();
+        OrderStockDemand demand = OrderStockDemand.empty();
         List<OrderPricingService.LinePricingPlan> linePlans = new ArrayList<>();
         Long orderRestaurantId = null;
         int lineIndex = 0;
 
         for (InitiateOrderRequest.OrderItemRequest orderItemRequest : initiateOrderRequest.getOrderItems()) {
-            MenuItem menuItem = inventoryService.getAccessibleMenuItem(orderItemRequest.menuItemId());
-            orderRestaurantId = validateRestaurant(order, orderRestaurantId, menuItem);
-            TaxClass taxClass = taxService.resolveTaxClass(menuItem.getRestaurantId(), menuItem.getTaxClassId());
+            MenuItemSnapshot menuItem = menuCatalogApi.getAccessibleMenuItem(orderItemRequest.menuItemId());
+            orderRestaurantId = validateRestaurant(order, orderRestaurantId, menuItem.restaurantId());
+            TaxClassSnapshot taxClass = taxApi.resolveTaxClass(menuItem.restaurantId(), menuItem.taxClassId());
 
             SaleItem saleItem = new SaleItem();
             saleItem.setAmount(orderItemRequest.amount());
-            saleItem.setSaleItemName(menuItem.getItemName());
-            saleItem.setMenuItem(menuItem);
-            saleItem.setRestaurantId(menuItem.getRestaurantId());
-            InventoryAvailabilityUtil.accumulateStockRequirements(
-                    menuItem,
-                    saleItem.getAmount(),
-                    stockRequestList,
-                    ingredientRequirements,
-                    preparedRequirements
-            );
+            saleItem.setSaleItemName(menuItem.itemName());
+            saleItem.setMenuItemId(menuItem.id());
+            saleItem.setRestaurantId(menuItem.restaurantId());
+            OrderMenuSupport.accumulateStockRequirements(menuItem, saleItem.getAmount(), demand);
             saleItem.setOrder(order);
             saleItemList.add(saleItem);
 
             BigDecimal quantity = BigDecimal.valueOf(orderItemRequest.amount());
-            BigDecimal unitListAmount = MoneyUtils.money(menuItem.getItemPrice().getPrice());
-            BigDecimal unitDiscountedAmount = RestaurantUtil.getMenuItemPrice(menuItem.getItemPrice());
+            BigDecimal unitListAmount = menuItem.price().listPrice();
+            BigDecimal unitDiscountedAmount = menuItem.price().discountedPrice();
             BigDecimal unitDiscountAmount = MoneyUtils.subtract(unitListAmount, unitDiscountedAmount);
             BigDecimal lineSubtotalAmount = MoneyUtils.multiply(unitListAmount, quantity);
             BigDecimal lineDiscountAmount = MoneyUtils.multiply(unitDiscountAmount, quantity);
             String referenceKey = "sale-" + lineIndex++;
             linePlans.add(OrderPricingService.LinePricingPlan.forSaleItem(
                     referenceKey,
-                    taxClass.getCode(),
-                    Boolean.TRUE.equals(menuItem.getItemPrice().getPriceIncludesTax()),
+                    taxClass.code(),
+                    menuItem.price().priceIncludesTax(),
                     unitListAmount,
                     unitDiscountAmount,
                     lineSubtotalAmount,
                     lineDiscountAmount,
                     List.of(new TaxableChargeComponent(
                             referenceKey,
-                            taxClass.getCode(),
-                            taxClass.getId(),
+                            taxClass.code(),
+                            taxClass.id(),
                             MoneyUtils.multiply(unitDiscountedAmount, quantity),
-                            Boolean.TRUE.equals(menuItem.getItemPrice().getPriceIncludesTax())
+                            menuItem.price().priceIncludesTax()
                     )),
                     saleItem
             ));
         }
 
-        inventoryService.checkOrderStockAvailability(stockRequestList, ingredientRequirements, preparedRequirements);
+        inventoryApi.checkOrderStockAvailability(demand.stockRequests(), demand.ingredientRequirements(), demand.preparedRequirements());
         replaceOrderItems(order, saleItemList);
         order.setRestaurantId(orderRestaurantId);
         orderPricingService.applyPricing(order, orderRestaurantId, linePlans, initiateOrderRequest.getTaxContext());
@@ -232,10 +238,10 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private Long validateRestaurant(Order order, Long orderRestaurantId, MenuItem menuItem) {
+    private Long validateRestaurant(Order order, Long orderRestaurantId, Long menuRestaurantId) {
         if (orderRestaurantId == null) {
-            orderRestaurantId = menuItem.getRestaurantId();
-        } else if (!orderRestaurantId.equals(menuItem.getRestaurantId())) {
+            orderRestaurantId = menuRestaurantId;
+        } else if (!orderRestaurantId.equals(menuRestaurantId)) {
             throw new AppException("All order items must belong to the same restaurant", HttpStatus.BAD_REQUEST);
         }
 
@@ -259,43 +265,33 @@ public class OrderServiceImpl implements OrderService {
         managedItems.addAll(saleItemList);
     }
 
-    private void validateCurrentOrderStock(Order order) {
-        List<StockRequest> stockRequestList = new ArrayList<>();
-        Map<String, Double> ingredientRequirements = new HashMap<>();
-        Map<Long, Double> preparedRequirements = new HashMap<>();
-
+    private OrderStockDemand buildPersistedStockDemand(Order order) {
+        OrderStockDemand demand = OrderStockDemand.empty();
         for (SaleItem saleItem : order.getOrderItemList()) {
-            MenuItem menuItem = inventoryService.getAccessibleMenuItem(saleItem.getMenuItem().getId());
-            InventoryAvailabilityUtil.accumulateStockRequirements(
-                    menuItem,
-                    saleItem.getAmount(),
-                    stockRequestList,
-                    ingredientRequirements,
-                    preparedRequirements
-            );
+            MenuItemSnapshot menuItem = menuCatalogApi.getAccessibleMenuItem(saleItem.getMenuItemId());
+            OrderMenuSupport.accumulateStockRequirements(menuItem, saleItem.getAmount(), demand);
         }
-
-        inventoryService.checkOrderStockAvailability(stockRequestList, ingredientRequirements, preparedRequirements);
+        return demand;
     }
 
     private void applyPaymentAudit(Order order, CompletePaymentRequest request) {
         SecurityUser currentUser = resolveCurrentUser();
         order.setOperatorUserId(currentUser != null ? currentUser.getUserId() : null);
-        order.setPaymentReference(trimToNull(request == null ? null : request.getPaymentReference()));
-        order.setPaymentCollectedBy(trimToNull(
+        order.setPaymentReference(OrderMenuSupport.trimToNull(request == null ? null : request.getPaymentReference()));
+        order.setPaymentCollectedBy(OrderMenuSupport.trimToNull(
                 request != null && request.getPaymentCollectedBy() != null
                         ? request.getPaymentCollectedBy()
                         : currentUser != null ? currentUser.getEmail() : null
         ));
-        order.setPaymentNotes(trimToNull(request == null ? null : request.getPaymentNotes()));
-        order.setExternalTxnId(trimToNull(request == null ? null : request.getExternalTxnId()));
+        order.setPaymentNotes(OrderMenuSupport.trimToNull(request == null ? null : request.getPaymentNotes()));
+        order.setExternalTxnId(OrderMenuSupport.trimToNull(request == null ? null : request.getExternalTxnId()));
     }
 
     private void applyRefundAudit(Order order, RefundPaymentRequest request) {
         SecurityUser currentUser = resolveCurrentUser();
         order.setRefundOperatorUserId(currentUser != null ? currentUser.getUserId() : null);
-        order.setRefundReason(trimToNull(request == null ? null : request.getRefundReason()));
-        order.setRefundNotes(trimToNull(request == null ? null : request.getRefundNotes()));
+        order.setRefundReason(OrderMenuSupport.trimToNull(request == null ? null : request.getRefundReason()));
+        order.setRefundNotes(OrderMenuSupport.trimToNull(request == null ? null : request.getRefundNotes()));
     }
 
     private SecurityUser resolveCurrentUser() {
@@ -305,11 +301,6 @@ public class OrderServiceImpl implements OrderService {
             return null;
         }
     }
-
-    private String trimToNull(String value) {
-        return InventoryUtil.trimToNull(value);
-    }
-
 
     private Order getAccessibleOrderWithItemsForUpdate(String orderId) {
         Order order = orderRepository.findByOrderIdWithItemsForUpdate(orderId).orElseThrow(OrderException::new);
@@ -325,5 +316,4 @@ public class OrderServiceImpl implements OrderService {
             tenantAccessService.resolveAccessibleRestaurantId(order.getRestaurantId());
         }
     }
-
 }

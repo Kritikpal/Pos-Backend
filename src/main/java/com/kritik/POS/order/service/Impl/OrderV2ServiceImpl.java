@@ -1,15 +1,14 @@
 package com.kritik.POS.order.service.Impl;
 
-import com.kritik.POS.configuredmenu.entity.ConfiguredMenuOption;
-import com.kritik.POS.configuredmenu.entity.ConfiguredMenuSlot;
-import com.kritik.POS.configuredmenu.entity.ConfiguredMenuTemplate;
-import com.kritik.POS.configuredmenu.repository.ConfiguredMenuTemplateRepository;
-import com.kritik.POS.events.OrderCompletedEvent;
+import com.kritik.POS.common.util.MoneyUtils;
+import com.kritik.POS.configuredmenu.api.ConfiguredMenuApi;
+import com.kritik.POS.configuredmenu.api.ConfiguredMenuOptionSnapshot;
+import com.kritik.POS.configuredmenu.api.ConfiguredMenuSlotSnapshot;
+import com.kritik.POS.configuredmenu.api.ConfiguredMenuTemplateSnapshot;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.exception.errors.OrderException;
-import com.kritik.POS.inventory.service.InventoryService;
-import com.kritik.POS.inventory.util.InventoryAvailabilityUtil;
-import com.kritik.POS.inventory.util.InventoryUtil;
+import com.kritik.POS.inventory.api.InventoryApi;
+import com.kritik.POS.order.api.OrderCompletedEvent;
 import com.kritik.POS.order.entity.ConfiguredSaleItem;
 import com.kritik.POS.order.entity.ConfiguredSaleItemSelection;
 import com.kritik.POS.order.entity.Order;
@@ -17,6 +16,7 @@ import com.kritik.POS.order.entity.SaleItem;
 import com.kritik.POS.order.entity.enums.PaymentStatus;
 import com.kritik.POS.order.entity.enums.PaymentType;
 import com.kritik.POS.order.model.request.CompletePaymentRequest;
+import com.kritik.POS.order.model.request.OrderTaxContextRequest;
 import com.kritik.POS.order.model.request.OrderV2InitiateRequest;
 import com.kritik.POS.order.model.request.OrderV2UpdateRequest;
 import com.kritik.POS.order.model.request.RefundPaymentRequest;
@@ -27,34 +27,34 @@ import com.kritik.POS.order.repository.ConfiguredSaleItemRepository;
 import com.kritik.POS.order.repository.OrderRepository;
 import com.kritik.POS.order.service.OrderPricingService;
 import com.kritik.POS.order.service.OrderV2Service;
-import com.kritik.POS.restaurant.entity.MenuItem;
-import com.kritik.POS.restaurant.entity.enums.MenuType;
-import com.kritik.POS.restaurant.models.request.StockRequest;
-import com.kritik.POS.restaurant.util.RestaurantUtil;
+import com.kritik.POS.order.service.internal.ConfiguredSelectionInput;
+import com.kritik.POS.order.service.internal.OrderMenuSupport;
+import com.kritik.POS.order.service.internal.OrderStockDemand;
+import com.kritik.POS.restaurant.api.MenuCatalogApi;
+import com.kritik.POS.restaurant.api.MenuItemSnapshot;
+import com.kritik.POS.restaurant.api.MenuItemType;
 import com.kritik.POS.security.models.SecurityUser;
 import com.kritik.POS.security.service.TenantAccessService;
-import com.kritik.POS.tax.entity.TaxClass;
-import com.kritik.POS.tax.model.TaxableChargeComponent;
-import com.kritik.POS.tax.service.TaxService;
-import com.kritik.POS.tax.util.MoneyUtils;
+import com.kritik.POS.tax.api.TaxApi;
+import com.kritik.POS.tax.api.TaxClassSnapshot;
+import com.kritik.POS.tax.api.TaxableChargeComponent;
 import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -62,9 +62,10 @@ public class OrderV2ServiceImpl implements OrderV2Service {
 
     private final OrderRepository orderRepository;
     private final ConfiguredSaleItemRepository configuredSaleItemRepository;
-    private final ConfiguredMenuTemplateRepository configuredMenuTemplateRepository;
-    private final InventoryService inventoryService;
-    private final TaxService taxService;
+    private final MenuCatalogApi menuCatalogApi;
+    private final ConfiguredMenuApi configuredMenuApi;
+    private final InventoryApi inventoryApi;
+    private final TaxApi taxApi;
     private final OrderPricingService orderPricingService;
     private final ApplicationEventPublisher eventPublisher;
     private final TenantAccessService tenantAccessService;
@@ -140,17 +141,17 @@ public class OrderV2ServiceImpl implements OrderV2Service {
             throw new OrderException("Payment cannot be completed in the current state");
         }
 
-        StockRequirements requirements = buildPersistedStockRequirements(order);
-        inventoryService.checkOrderStockAvailability(
-                requirements.stockRequests(),
-                requirements.ingredientRequirements(),
-                requirements.preparedRequirements()
+        OrderStockDemand demand = buildPersistedStockRequirements(order);
+        inventoryApi.checkOrderStockAvailability(
+                demand.stockRequests(),
+                demand.ingredientRequirements(),
+                demand.preparedRequirements()
         );
-        inventoryService.deductStockForRequirements(
-                requirements.stockRequests(),
-                requirements.ingredientRequirements(),
-                requirements.preparedRequirements(),
-                requirements.affectedMenuIds()
+        inventoryApi.deductStockForRequirements(
+                demand.stockRequests(),
+                demand.ingredientRequirements(),
+                demand.preparedRequirements(),
+                demand.affectedMenuIds()
         );
 
         PaymentType paymentType = request == null ? null : request.getPaymentType();
@@ -189,12 +190,12 @@ public class OrderV2ServiceImpl implements OrderV2Service {
             throw new OrderException("Can't complete the refund");
         }
 
-        StockRequirements requirements = buildPersistedStockRequirements(order);
-        inventoryService.restoreStockForRequirements(
-                requirements.stockRequests(),
-                requirements.ingredientRequirements(),
-                requirements.preparedRequirements(),
-                requirements.affectedMenuIds()
+        OrderStockDemand demand = buildPersistedStockRequirements(order);
+        inventoryApi.restoreStockForRequirements(
+                demand.stockRequests(),
+                demand.ingredientRequirements(),
+                demand.preparedRequirements(),
+                demand.affectedMenuIds()
         );
         order.setPaymentStatus(PaymentStatus.PAYMENT_REFUND);
         order.setRefundedAt(LocalDateTime.now());
@@ -209,29 +210,31 @@ public class OrderV2ServiceImpl implements OrderV2Service {
 
     private OrderV2Draft buildOrderDraft(Order order,
                                          List<OrderV2InitiateRequest.OrderItemRequest> orderItems,
-                                         com.kritik.POS.order.model.request.OrderTaxContextRequest taxContextRequest) {
+                                         OrderTaxContextRequest taxContextRequest) {
         List<SaleItem> saleItems = new ArrayList<>();
         List<ConfiguredSaleItem> configuredItems = new ArrayList<>();
-        List<StockRequest> stockRequests = new ArrayList<>();
-        Map<String, Double> ingredientRequirements = new HashMap<>();
-        Map<Long, Double> preparedRequirements = new HashMap<>();
-        Set<Long> affectedMenuIds = new LinkedHashSet<>();
         List<OrderPricingService.LinePricingPlan> linePlans = new ArrayList<>();
+        OrderStockDemand demand = OrderStockDemand.empty();
         Long orderRestaurantId = null;
         int lineIndex = 0;
 
         for (OrderV2InitiateRequest.OrderItemRequest orderItemRequest : orderItems) {
-            MenuItem menuItem = inventoryService.getAccessibleMenuItem(orderItemRequest.menuItemId());
-            orderRestaurantId = validateRestaurant(order, orderRestaurantId, menuItem.getRestaurantId());
+            MenuItemSnapshot menuItem = menuCatalogApi.getAccessibleMenuItem(orderItemRequest.menuItemId());
+            orderRestaurantId = validateRestaurant(order, orderRestaurantId, menuItem.restaurantId());
 
-            if (InventoryAvailabilityUtil.resolveMenuType(menuItem) == MenuType.CONFIGURABLE) {
+            if (OrderMenuSupport.resolveMenuType(menuItem) == MenuItemType.CONFIGURABLE) {
                 if (orderItemRequest.configuration() == null) {
-                    throw new AppException("Configuration is required for configurable menu item " + menuItem.getItemName(), HttpStatus.BAD_REQUEST);
+                    throw new AppException("Configuration is required for configurable menu item " + menuItem.itemName(), HttpStatus.BAD_REQUEST);
                 }
-                ConfiguredLineDraft configuredLineDraft = buildConfiguredLine(menuItem, orderItemRequest, "cfg-" + lineIndex++);
+                ConfiguredLineDraft configuredLineDraft = buildConfiguredLine(
+                        configuredMenuApi.getAccessibleActiveTemplateByParentMenuItemId(menuItem.id()),
+                        orderItemRequest.amount(),
+                        orderItemRequest.configuration().slotItems(),
+                        "cfg-" + lineIndex++
+                );
                 configuredItems.add(configuredLineDraft.item());
                 linePlans.add(configuredLineDraft.pricingPlan());
-                mergeRequirements(stockRequests, ingredientRequirements, preparedRequirements, affectedMenuIds, configuredLineDraft.requirements());
+                OrderMenuSupport.mergeDemands(demand, configuredLineDraft.demand());
                 continue;
             }
 
@@ -239,155 +242,133 @@ public class OrderV2ServiceImpl implements OrderV2Service {
                 throw new AppException("Configuration is only allowed for configurable menu items", HttpStatus.BAD_REQUEST);
             }
 
-            TaxClass taxClass = taxService.resolveTaxClass(menuItem.getRestaurantId(), menuItem.getTaxClassId());
+            TaxClassSnapshot taxClass = taxApi.resolveTaxClass(menuItem.restaurantId(), menuItem.taxClassId());
             SaleItem saleItem = new SaleItem();
             saleItem.setAmount(orderItemRequest.amount());
-            saleItem.setSaleItemName(menuItem.getItemName());
-            saleItem.setMenuItem(menuItem);
-            saleItem.setRestaurantId(menuItem.getRestaurantId());
+            saleItem.setSaleItemName(menuItem.itemName());
+            saleItem.setMenuItemId(menuItem.id());
+            saleItem.setRestaurantId(menuItem.restaurantId());
             saleItem.setOrder(order);
             saleItems.add(saleItem);
+            OrderMenuSupport.accumulateStockRequirements(menuItem, saleItem.getAmount(), demand);
+
             BigDecimal quantity = BigDecimal.valueOf(orderItemRequest.amount());
-            BigDecimal unitListAmount = MoneyUtils.money(menuItem.getItemPrice().getPrice());
-            BigDecimal unitDiscountedAmount = RestaurantUtil.getMenuItemPrice(menuItem.getItemPrice());
+            BigDecimal unitListAmount = menuItem.price().listPrice();
+            BigDecimal unitDiscountedAmount = menuItem.price().discountedPrice();
             BigDecimal unitDiscountAmount = MoneyUtils.subtract(unitListAmount, unitDiscountedAmount);
             BigDecimal lineSubtotalAmount = MoneyUtils.multiply(unitListAmount, quantity);
             BigDecimal lineDiscountAmount = MoneyUtils.multiply(unitDiscountAmount, quantity);
             String referenceKey = "sale-" + lineIndex++;
             linePlans.add(OrderPricingService.LinePricingPlan.forSaleItem(
                     referenceKey,
-                    taxClass.getCode(),
-                    Boolean.TRUE.equals(menuItem.getItemPrice().getPriceIncludesTax()),
+                    taxClass.code(),
+                    menuItem.price().priceIncludesTax(),
                     unitListAmount,
                     unitDiscountAmount,
                     lineSubtotalAmount,
                     lineDiscountAmount,
                     List.of(new TaxableChargeComponent(
                             referenceKey,
-                            taxClass.getCode(),
-                            taxClass.getId(),
+                            taxClass.code(),
+                            taxClass.id(),
                             MoneyUtils.multiply(unitDiscountedAmount, quantity),
-                            Boolean.TRUE.equals(menuItem.getItemPrice().getPriceIncludesTax())
+                            menuItem.price().priceIncludesTax()
                     )),
                     saleItem
             ));
-
-            InventoryAvailabilityUtil.accumulateStockRequirements(
-                    menuItem,
-                    saleItem.getAmount(),
-                    stockRequests,
-                    ingredientRequirements,
-                    preparedRequirements
-            );
-            affectedMenuIds.add(menuItem.getId());
         }
 
-        inventoryService.checkOrderStockAvailability(stockRequests, ingredientRequirements, preparedRequirements);
-        return new OrderV2Draft(
-                orderRestaurantId,
-                saleItems,
-                configuredItems,
-                linePlans,
-                taxContextRequest
-        );
+        inventoryApi.checkOrderStockAvailability(demand.stockRequests(), demand.ingredientRequirements(), demand.preparedRequirements());
+        return new OrderV2Draft(orderRestaurantId, saleItems, configuredItems, linePlans, taxContextRequest);
     }
 
-    private ConfiguredLineDraft buildConfiguredLine(MenuItem parentMenuItem,
-                                                    OrderV2InitiateRequest.OrderItemRequest orderItemRequest,
+    private ConfiguredLineDraft buildConfiguredLine(ConfiguredMenuTemplateSnapshot template,
+                                                    Integer amount,
+                                                    List<OrderV2InitiateRequest.SlotItemRequest> slotItems,
                                                     String lineKey) {
-        ConfiguredMenuTemplate template = configuredMenuTemplateRepository.findByParentMenuItem_IdAndIsDeletedFalse(parentMenuItem.getId())
-                .orElseThrow(() -> new AppException("Configured menu template not found for menu item", HttpStatus.BAD_REQUEST));
-        if (!Boolean.TRUE.equals(template.getIsActive())) {
-            throw new AppException("Configured menu template is inactive", HttpStatus.BAD_REQUEST);
-        }
-
-        TaxClass parentTaxClass = taxService.resolveTaxClass(parentMenuItem.getRestaurantId(), parentMenuItem.getTaxClassId());
-        BigDecimal basePrice = RestaurantUtil.getMenuItemPrice(parentMenuItem.getItemPrice());
+        MenuItemSnapshot parentMenuItem = template.parentMenuItem();
+        TaxClassSnapshot parentTaxClass = taxApi.resolveTaxClass(template.restaurantId(), parentMenuItem.taxClassId());
+        BigDecimal basePrice = parentMenuItem.price().discountedPrice();
         BigDecimal optionDeltaTotal = MoneyUtils.zero();
         ConfiguredSaleItem configuredSaleItem = new ConfiguredSaleItem();
-        configuredSaleItem.setConfiguredTemplateId(template.getId());
-        configuredSaleItem.setParentMenuItemId(parentMenuItem.getId());
-        configuredSaleItem.setLineName(parentMenuItem.getItemName());
+        configuredSaleItem.setConfiguredTemplateId(template.id());
+        configuredSaleItem.setParentMenuItemId(parentMenuItem.id());
+        configuredSaleItem.setLineName(parentMenuItem.itemName());
         configuredSaleItem.setBasePrice(basePrice);
-        configuredSaleItem.setAmount(orderItemRequest.amount());
-        configuredSaleItem.setRestaurantId(parentMenuItem.getRestaurantId());
+        configuredSaleItem.setAmount(amount);
+        configuredSaleItem.setRestaurantId(template.restaurantId());
 
-        Map<Long, OrderV2InitiateRequest.SlotItemRequest> selectionBySlotId = mapSlotItemsBySlot(
-                orderItemRequest.configuration().slotItems()
-        );
+        Map<Long, OrderV2InitiateRequest.SlotItemRequest> selectionBySlotId = mapSlotItemsBySlot(slotItems);
         validateNoUnknownSlots(template, selectionBySlotId.keySet());
 
-        List<ConfiguredSaleItemSelection> nextSelections = new ArrayList<>();
-        List<StockRequest> stockRequests = new ArrayList<>();
-        Map<String, Double> ingredientRequirements = new HashMap<>();
-        Map<Long, Double> preparedRequirements = new HashMap<>();
-        Set<Long> affectedMenuIds = new LinkedHashSet<>();
+        List<ConfiguredSaleItemSelection> selections = new ArrayList<>();
         List<TaxableChargeComponent> components = new ArrayList<>();
-
-        BigDecimal quantity = BigDecimal.valueOf(orderItemRequest.amount());
+        OrderStockDemand demand = OrderStockDemand.empty();
+        BigDecimal quantity = BigDecimal.valueOf(amount);
         components.add(new TaxableChargeComponent(
                 lineKey + ":base",
-                parentTaxClass.getCode(),
-                parentTaxClass.getId(),
+                parentTaxClass.code(),
+                parentTaxClass.id(),
                 MoneyUtils.multiply(basePrice, quantity),
-                Boolean.TRUE.equals(parentMenuItem.getItemPrice().getPriceIncludesTax())
+                parentMenuItem.price().priceIncludesTax()
         ));
 
-        for (ConfiguredMenuSlot slot : template.getSlots()) {
-            List<OrderV2InitiateRequest.SlotItemQuantityRequest> slotItems = selectionBySlotId.containsKey(slot.getId())
-                    ? selectionBySlotId.get(slot.getId()).items()
+        for (ConfiguredMenuSlotSnapshot slot : template.slots()) {
+            List<OrderV2InitiateRequest.SlotItemQuantityRequest> selectedItems = selectionBySlotId.containsKey(slot.id())
+                    ? selectionBySlotId.get(slot.id()).items()
                     : List.of();
+            Map<Long, ConfiguredMenuOptionSnapshot> optionsByChildId = slot.options().stream()
+                    .collect(Collectors.toMap(
+                            ConfiguredMenuOptionSnapshot::childMenuItemId,
+                            option -> option,
+                            (left, right) -> left,
+                            LinkedHashMap::new
+                    ));
+            validateSlotItems(slot, selectedItems, optionsByChildId);
 
-            Map<Long, ConfiguredMenuOption> optionsByChildId = new LinkedHashMap<>();
-            for (ConfiguredMenuOption option : slot.getOptions()) {
-                optionsByChildId.put(option.getChildMenuItem().getId(), option);
-            }
-            validateSlotItems(slot, slotItems, optionsByChildId);
-
-            for (OrderV2InitiateRequest.SlotItemQuantityRequest slotItem : slotItems) {
-                ConfiguredMenuOption option = optionsByChildId.get(slotItem.childMenuItemId());
-                if (InventoryAvailabilityUtil.resolveMenuType(option.getChildMenuItem()) == MenuType.CONFIGURABLE) {
+            for (OrderV2InitiateRequest.SlotItemQuantityRequest slotItem : selectedItems) {
+                ConfiguredMenuOptionSnapshot option = optionsByChildId.get(slotItem.childMenuItemId());
+                MenuItemSnapshot childMenuItem = menuCatalogApi.getAccessibleMenuItem(option.childMenuItemId());
+                if (OrderMenuSupport.resolveMenuType(childMenuItem) == MenuItemType.CONFIGURABLE) {
                     throw new AppException("Configurable menu items cannot be nested as child options", HttpStatus.BAD_REQUEST);
+                }
+                if (!template.restaurantId().equals(childMenuItem.restaurantId())) {
+                    throw new AppException("Configured option menu item does not belong to the order restaurant", HttpStatus.BAD_REQUEST);
                 }
 
                 BigDecimal optionDelta = calculateOptionDelta(option, slotItem.quantity());
                 optionDeltaTotal = MoneyUtils.add(optionDeltaTotal, optionDelta);
-                ConfiguredSaleItemSelection selection = new ConfiguredSaleItemSelection();
-                selection.setConfiguredSaleItem(configuredSaleItem);
-                selection.setSlotId(slot.getId());
-                selection.setSlotName(slot.getSlotName());
-                selection.setChildMenuItemId(option.getChildMenuItem().getId());
-                selection.setChildItemName(option.getChildMenuItem().getItemName());
-                selection.setQuantity(slotItem.quantity());
-                selection.setPriceDelta(option.getPriceDelta());
-                nextSelections.add(selection);
+                selections.add(toSelectionEntity(new ConfiguredSelectionInput(
+                        slot.id(),
+                        slot.slotName(),
+                        option.childMenuItemId(),
+                        option.childItemName(),
+                        slotItem.quantity(),
+                        option.priceDelta()
+                ), configuredSaleItem));
 
-                MenuItem selectedMenuItem = inventoryService.getAccessibleMenuItem(option.getChildMenuItem().getId());
-                TaxClass childTaxClass = taxService.resolveTaxClass(selectedMenuItem.getRestaurantId(), selectedMenuItem.getTaxClassId());
-                InventoryAvailabilityUtil.accumulateStockRequirements(
-                        selectedMenuItem,
-                        scaleSelectionAmount(orderItemRequest.amount(), slotItem.quantity()),
-                        stockRequests,
-                        ingredientRequirements,
-                        preparedRequirements
+                TaxClassSnapshot childTaxClass = taxApi.resolveTaxClass(childMenuItem.restaurantId(), childMenuItem.taxClassId());
+                OrderMenuSupport.accumulateStockRequirements(
+                        childMenuItem,
+                        scaleSelectionAmount(amount, slotItem.quantity()),
+                        demand
                 );
-                affectedMenuIds.add(selectedMenuItem.getId());
                 if (optionDelta.compareTo(BigDecimal.ZERO) > 0) {
                     components.add(new TaxableChargeComponent(
-                            lineKey + ":option:" + slot.getId() + ":" + selectedMenuItem.getId(),
-                            childTaxClass.getCode(),
-                            childTaxClass.getId(),
+                            lineKey + ":option:" + slot.id() + ":" + childMenuItem.id(),
+                            childTaxClass.code(),
+                            childTaxClass.id(),
                             MoneyUtils.multiply(optionDelta, quantity),
-                            Boolean.TRUE.equals(selectedMenuItem.getItemPrice().getPriceIncludesTax())
+                            childMenuItem.price().priceIncludesTax()
                     ));
                 }
             }
         }
 
         configuredSaleItem.getSelections().clear();
-        configuredSaleItem.getSelections().addAll(nextSelections);
+        configuredSaleItem.getSelections().addAll(selections);
         configuredSaleItem.setUnitPrice(MoneyUtils.add(basePrice, optionDeltaTotal));
-        BigDecimal unitListAmount = MoneyUtils.add(MoneyUtils.money(parentMenuItem.getItemPrice().getPrice()), optionDeltaTotal);
+        BigDecimal unitListAmount = MoneyUtils.add(parentMenuItem.price().listPrice(), optionDeltaTotal);
         BigDecimal unitDiscountAmount = MoneyUtils.subtract(unitListAmount, configuredSaleItem.getUnitPrice());
         return new ConfiguredLineDraft(
                 configuredSaleItem,
@@ -404,43 +385,27 @@ public class OrderV2ServiceImpl implements OrderV2Service {
                         components,
                         configuredSaleItem
                 ),
-                new StockRequirements(stockRequests, ingredientRequirements, preparedRequirements, affectedMenuIds)
+                demand
         );
     }
 
-    private StockRequirements buildPersistedStockRequirements(Order order) {
-        List<StockRequest> stockRequests = new ArrayList<>();
-        Map<String, Double> ingredientRequirements = new HashMap<>();
-        Map<Long, Double> preparedRequirements = new HashMap<>();
-        Set<Long> affectedMenuIds = new LinkedHashSet<>();
-
+    private OrderStockDemand buildPersistedStockRequirements(Order order) {
+        OrderStockDemand demand = OrderStockDemand.empty();
         for (SaleItem saleItem : order.getOrderItemList()) {
-            MenuItem menuItem = inventoryService.getAccessibleMenuItem(saleItem.getMenuItem().getId());
-            InventoryAvailabilityUtil.accumulateStockRequirements(
-                    menuItem,
-                    saleItem.getAmount(),
-                    stockRequests,
-                    ingredientRequirements,
-                    preparedRequirements
-            );
-            affectedMenuIds.add(menuItem.getId());
+            MenuItemSnapshot menuItem = menuCatalogApi.getAccessibleMenuItem(saleItem.getMenuItemId());
+            OrderMenuSupport.accumulateStockRequirements(menuItem, saleItem.getAmount(), demand);
         }
-
         for (ConfiguredSaleItem configuredItem : configuredSaleItemRepository.findAllByOrder_IdOrderByIdAsc(order.getId())) {
             for (ConfiguredSaleItemSelection selection : configuredItem.getSelections()) {
-                MenuItem selectedMenuItem = inventoryService.getAccessibleMenuItem(selection.getChildMenuItemId());
-                InventoryAvailabilityUtil.accumulateStockRequirements(
-                    selectedMenuItem,
-                    scaleSelectionAmount(configuredItem.getAmount(), selection.getQuantity()),
-                    stockRequests,
-                    ingredientRequirements,
-                    preparedRequirements
+                MenuItemSnapshot childMenuItem = menuCatalogApi.getAccessibleMenuItem(selection.getChildMenuItemId());
+                OrderMenuSupport.accumulateStockRequirements(
+                        childMenuItem,
+                        scaleSelectionAmount(configuredItem.getAmount(), selection.getQuantity()),
+                        demand
                 );
-                affectedMenuIds.add(selectedMenuItem.getId());
             }
         }
-
-        return new StockRequirements(stockRequests, ingredientRequirements, preparedRequirements, affectedMenuIds);
+        return demand;
     }
 
     private void applyOrderDraft(Order order, OrderV2Draft draft) {
@@ -480,9 +445,7 @@ public class OrderV2ServiceImpl implements OrderV2Service {
         persistConfiguredSaleItems(order, configuredItems);
     }
 
-    private Map<Long, OrderV2InitiateRequest.SlotItemRequest> mapSlotItemsBySlot(
-            List<OrderV2InitiateRequest.SlotItemRequest> slotItems
-    ) {
+    private Map<Long, OrderV2InitiateRequest.SlotItemRequest> mapSlotItemsBySlot(List<OrderV2InitiateRequest.SlotItemRequest> slotItems) {
         Map<Long, OrderV2InitiateRequest.SlotItemRequest> itemsBySlotId = new LinkedHashMap<>();
         if (slotItems == null) {
             return itemsBySlotId;
@@ -495,10 +458,10 @@ public class OrderV2ServiceImpl implements OrderV2Service {
         return itemsBySlotId;
     }
 
-    private void validateNoUnknownSlots(ConfiguredMenuTemplate template, Set<Long> providedSlotIds) {
-        Set<Long> validSlotIds = template.getSlots().stream()
-                .map(ConfiguredMenuSlot::getId)
-                .collect(java.util.stream.Collectors.toSet());
+    private void validateNoUnknownSlots(ConfiguredMenuTemplateSnapshot template, Set<Long> providedSlotIds) {
+        Set<Long> validSlotIds = template.slots().stream()
+                .map(ConfiguredMenuSlotSnapshot::id)
+                .collect(Collectors.toSet());
         for (Long providedSlotId : providedSlotIds) {
             if (!validSlotIds.contains(providedSlotId)) {
                 throw new AppException("Invalid slot entry for configured template", HttpStatus.BAD_REQUEST);
@@ -506,54 +469,66 @@ public class OrderV2ServiceImpl implements OrderV2Service {
         }
     }
 
-    private void validateSlotItems(ConfiguredMenuSlot slot,
+    private void validateSlotItems(ConfiguredMenuSlotSnapshot slot,
                                    List<OrderV2InitiateRequest.SlotItemQuantityRequest> slotItems,
-                                   Map<Long, ConfiguredMenuOption> optionsByChildId) {
-        Set<Long> seenOptionIds = new HashSet<>();
+                                   Map<Long, ConfiguredMenuOptionSnapshot> optionsByChildId) {
+        Set<Long> seenOptionIds = new LinkedHashSet<>();
         for (OrderV2InitiateRequest.SlotItemQuantityRequest slotItem : slotItems) {
             if (!seenOptionIds.add(slotItem.childMenuItemId())) {
-                throw new AppException("Duplicate slot item in slot " + slot.getSlotName(), HttpStatus.BAD_REQUEST);
+                throw new AppException("Duplicate slot item in slot " + slot.slotName(), HttpStatus.BAD_REQUEST);
             }
-            ConfiguredMenuOption option = optionsByChildId.get(slotItem.childMenuItemId());
+            ConfiguredMenuOptionSnapshot option = optionsByChildId.get(slotItem.childMenuItemId());
             if (option == null) {
-                throw new AppException("Slot item is not allowed for slot " + slot.getSlotName(), HttpStatus.BAD_REQUEST);
+                throw new AppException("Slot item is not allowed for slot " + slot.slotName(), HttpStatus.BAD_REQUEST);
             }
             int minimumQuantity = effectiveMinQuantity(option);
             if (slotItem.quantity() < minimumQuantity) {
                 throw new AppException(
-                        "Slot item " + option.getChildMenuItem().getItemName() + " requires at least " + minimumQuantity + " quantity",
+                        "Slot item " + option.childItemName() + " requires at least " + minimumQuantity + " quantity",
                         HttpStatus.BAD_REQUEST
                 );
             }
         }
 
         int selectedCount = seenOptionIds.size();
-        if (slot.getMinSelections() == null || slot.getMaxSelections() == null) {
-            throw new AppException("Slot " + slot.getSlotName() + " is missing selection rules", HttpStatus.INTERNAL_SERVER_ERROR);
+        if (slot.minSelections() == null || slot.maxSelections() == null) {
+            throw new AppException("Slot " + slot.slotName() + " is missing selection rules", HttpStatus.INTERNAL_SERVER_ERROR);
         }
-        if (selectedCount < slot.getMinSelections()) {
-            throw new AppException("Slot " + slot.getSlotName() + " requires at least " + slot.getMinSelections() + " selection", HttpStatus.BAD_REQUEST);
+        if (selectedCount < slot.minSelections()) {
+            throw new AppException("Slot " + slot.slotName() + " requires at least " + slot.minSelections() + " selection", HttpStatus.BAD_REQUEST);
         }
-        if (selectedCount > slot.getMaxSelections()) {
-            throw new AppException("Slot " + slot.getSlotName() + " allows at most " + slot.getMaxSelections() + " selections", HttpStatus.BAD_REQUEST);
+        if (selectedCount > slot.maxSelections()) {
+            throw new AppException("Slot " + slot.slotName() + " allows at most " + slot.maxSelections() + " selections", HttpStatus.BAD_REQUEST);
         }
-        if (Boolean.TRUE.equals(slot.getIsRequired()) && selectedCount == 0) {
-            throw new AppException("Slot " + slot.getSlotName() + " is required", HttpStatus.BAD_REQUEST);
+        if (slot.required() && selectedCount == 0) {
+            throw new AppException("Slot " + slot.slotName() + " is required", HttpStatus.BAD_REQUEST);
         }
+    }
+
+    private ConfiguredSaleItemSelection toSelectionEntity(ConfiguredSelectionInput input, ConfiguredSaleItem configuredSaleItem) {
+        ConfiguredSaleItemSelection selection = new ConfiguredSaleItemSelection();
+        selection.setConfiguredSaleItem(configuredSaleItem);
+        selection.setSlotId(input.slotId());
+        selection.setSlotName(input.slotName());
+        selection.setChildMenuItemId(input.childMenuItemId());
+        selection.setChildItemName(input.childItemName());
+        selection.setQuantity(input.quantity());
+        selection.setPriceDelta(input.priceDelta());
+        return selection;
     }
 
     private int scaleSelectionAmount(Integer lineAmount, Integer quantity) {
         return Math.multiplyExact(lineAmount, quantity);
     }
 
-    private BigDecimal calculateOptionDelta(ConfiguredMenuOption option, Integer quantity) {
+    private BigDecimal calculateOptionDelta(ConfiguredMenuOptionSnapshot option, Integer quantity) {
         int chargeableQuantity = Math.max(0, quantity - effectiveMinQuantity(option));
-        return option.getPriceDelta().multiply(BigDecimal.valueOf(chargeableQuantity))
-                .setScale(MoneyUtils.MONEY_SCALE, java.math.RoundingMode.HALF_UP);
+        return option.priceDelta().multiply(BigDecimal.valueOf(chargeableQuantity))
+                .setScale(MoneyUtils.MONEY_SCALE, RoundingMode.HALF_UP);
     }
 
-    private int effectiveMinQuantity(ConfiguredMenuOption option) {
-        return option.getMinQuantity() == null ? 0 : option.getMinQuantity();
+    private int effectiveMinQuantity(ConfiguredMenuOptionSnapshot option) {
+        return option.minQuantity() == null ? 0 : option.minQuantity();
     }
 
     private Long validateRestaurant(Order order, Long orderRestaurantId, Long menuRestaurantId) {
@@ -562,26 +537,10 @@ public class OrderV2ServiceImpl implements OrderV2Service {
         } else if (!orderRestaurantId.equals(menuRestaurantId)) {
             throw new AppException("All order items must belong to the same restaurant", HttpStatus.BAD_REQUEST);
         }
-
         if (order.getRestaurantId() != null && !order.getRestaurantId().equals(orderRestaurantId)) {
             throw new AppException("Cart items must stay in the same restaurant as the original order", HttpStatus.BAD_REQUEST);
         }
         return orderRestaurantId;
-    }
-
-    private void mergeRequirements(List<StockRequest> stockRequests,
-                                   Map<String, Double> ingredientRequirements,
-                                   Map<Long, Double> preparedRequirements,
-                                   Set<Long> affectedMenuIds,
-                                   StockRequirements additionalRequirements) {
-        stockRequests.addAll(additionalRequirements.stockRequests());
-        additionalRequirements.ingredientRequirements().forEach(
-                (sku, quantity) -> ingredientRequirements.merge(sku, quantity, Double::sum)
-        );
-        additionalRequirements.preparedRequirements().forEach(
-                (menuItemId, quantity) -> preparedRequirements.merge(menuItemId, quantity, Double::sum)
-        );
-        affectedMenuIds.addAll(additionalRequirements.affectedMenuIds());
     }
 
     private PaymentType resolvePaymentType(PaymentType requestedPaymentType, PaymentType fallbackPaymentType) {
@@ -591,21 +550,21 @@ public class OrderV2ServiceImpl implements OrderV2Service {
     private void applyPaymentAudit(Order order, CompletePaymentRequest request) {
         SecurityUser currentUser = resolveCurrentUser();
         order.setOperatorUserId(currentUser != null ? currentUser.getUserId() : null);
-        order.setPaymentReference(trimToNull(request == null ? null : request.getPaymentReference()));
-        order.setPaymentCollectedBy(trimToNull(
+        order.setPaymentReference(OrderMenuSupport.trimToNull(request == null ? null : request.getPaymentReference()));
+        order.setPaymentCollectedBy(OrderMenuSupport.trimToNull(
                 request != null && request.getPaymentCollectedBy() != null
                         ? request.getPaymentCollectedBy()
                         : currentUser != null ? currentUser.getEmail() : null
         ));
-        order.setPaymentNotes(trimToNull(request == null ? null : request.getPaymentNotes()));
-        order.setExternalTxnId(trimToNull(request == null ? null : request.getExternalTxnId()));
+        order.setPaymentNotes(OrderMenuSupport.trimToNull(request == null ? null : request.getPaymentNotes()));
+        order.setExternalTxnId(OrderMenuSupport.trimToNull(request == null ? null : request.getExternalTxnId()));
     }
 
     private void applyRefundAudit(Order order, RefundPaymentRequest request) {
         SecurityUser currentUser = resolveCurrentUser();
         order.setRefundOperatorUserId(currentUser != null ? currentUser.getUserId() : null);
-        order.setRefundReason(trimToNull(request == null ? null : request.getRefundReason()));
-        order.setRefundNotes(trimToNull(request == null ? null : request.getRefundNotes()));
+        order.setRefundReason(OrderMenuSupport.trimToNull(request == null ? null : request.getRefundReason()));
+        order.setRefundNotes(OrderMenuSupport.trimToNull(request == null ? null : request.getRefundNotes()));
     }
 
     private SecurityUser resolveCurrentUser() {
@@ -614,10 +573,6 @@ public class OrderV2ServiceImpl implements OrderV2Service {
         } catch (RuntimeException exception) {
             return null;
         }
-    }
-
-    private String trimToNull(String value) {
-        return InventoryUtil.trimToNull(value);
     }
 
     private Order getAccessibleOrderWithItemsForUpdate(String orderId) {
@@ -650,22 +605,14 @@ public class OrderV2ServiceImpl implements OrderV2Service {
             List<SaleItem> saleItems,
             List<ConfiguredSaleItem> configuredItems,
             List<OrderPricingService.LinePricingPlan> linePlans,
-            com.kritik.POS.order.model.request.OrderTaxContextRequest taxContextRequest
+            OrderTaxContextRequest taxContextRequest
     ) {
     }
 
     private record ConfiguredLineDraft(
             ConfiguredSaleItem item,
             OrderPricingService.LinePricingPlan pricingPlan,
-            StockRequirements requirements
-    ) {
-    }
-
-    private record StockRequirements(
-            List<StockRequest> stockRequests,
-            Map<String, Double> ingredientRequirements,
-            Map<Long, Double> preparedRequirements,
-            Set<Long> affectedMenuIds
+            OrderStockDemand demand
     ) {
     }
 }

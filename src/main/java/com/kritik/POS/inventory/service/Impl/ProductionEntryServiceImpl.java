@@ -21,7 +21,6 @@ import com.kritik.POS.inventory.service.ProductionEntryService;
 import com.kritik.POS.inventory.util.InventoryUtil;
 import com.kritik.POS.restaurant.entity.MenuItem;
 import com.kritik.POS.inventory.util.InventoryAvailabilityUtil;
-import com.kritik.POS.restaurant.models.response.UserDashboard;
 import com.kritik.POS.security.models.SecurityUser;
 import com.kritik.POS.security.service.TenantAccessService;
 import jakarta.transaction.Transactional;

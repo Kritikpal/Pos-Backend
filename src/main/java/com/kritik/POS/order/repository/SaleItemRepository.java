@@ -16,60 +16,61 @@ import java.util.List;
 
 public interface SaleItemRepository extends JpaRepository<SaleItem, Long> {
 
-    @Query("""
-            select itemStock.sku as sku,
+    @Query(value = """
+            select item_stock.sku as sku,
                    sum(si.amount) as quantity
-            from SaleItem si
-            join si.order o
-            join si.menuItem menuItem
-            join menuItem.itemStock itemStock
-            where o.orderId = :orderId
-              and o.isDeleted = false
-              and si.isDeleted = false
-              and menuItem.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.DIRECT
-            group by itemStock.sku
-            """)
+            from sale_item si
+            join orders o on o.id = si.order_id
+            join menu_item menu_item on menu_item.id = si.menu_item_id
+            join item_stock item_stock on item_stock.menu_item_id = menu_item.id
+            where o.order_id = :orderId
+              and o.is_deleted = false
+              and si.is_deleted = false
+              and menu_item.menu_type = 'DIRECT'
+            group by item_stock.sku
+            """, nativeQuery = true)
     List<DirectStockDeductionProjection> findDirectStockDeductionsByOrderId(@Param("orderId") String orderId);
 
-    @Query("""
-            select ingredientStock.sku as sku,
-                   sum((ingredientUsage.quantityRequired * si.amount) / ingredientUsage.recipe.batchSize) as quantity
-            from SaleItem si
-            join si.order o
-            join si.menuItem menuItem
-            join menuItem.ingredientUsages ingredientUsage
-            join ingredientUsage.ingredientStock ingredientStock
-            where o.orderId = :orderId
-              and o.isDeleted = false
-              and si.isDeleted = false
-              and menuItem.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE
-              and ingredientUsage.recipe.batchSize > 0
-            group by ingredientStock.sku
-            """)
+    @Query(value = """
+            select ingredient_stock.sku as sku,
+                   sum((menu_item_ingredient.quantity_required * si.amount) / menu_recipe.batch_size) as quantity
+            from sale_item si
+            join orders o on o.id = si.order_id
+            join menu_item menu_item on menu_item.id = si.menu_item_id
+            join menu_item_ingredient menu_item_ingredient on menu_item_ingredient.menu_item_id = menu_item.id
+            join ingredient_stock ingredient_stock on ingredient_stock.sku = menu_item_ingredient.ingredient_sku
+            join menu_recipe menu_recipe on menu_recipe.id = menu_item_ingredient.recipe_id
+            where o.order_id = :orderId
+              and o.is_deleted = false
+              and si.is_deleted = false
+              and menu_item.menu_type = 'RECIPE'
+              and menu_recipe.batch_size > 0
+            group by ingredient_stock.sku
+            """, nativeQuery = true)
     List<IngredientStockDeductionProjection> findIngredientStockDeductionsByOrderId(@Param("orderId") String orderId);
 
-    @Query("""
-            select distinct menuItem.id
-            from SaleItem si
-            join si.order o
-            join si.menuItem menuItem
-            where o.orderId = :orderId
-              and o.isDeleted = false
-              and si.isDeleted = false
-              and menuItem.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.DIRECT
-            """)
+    @Query(value = """
+            select distinct menu_item.id
+            from sale_item si
+            join orders o on o.id = si.order_id
+            join menu_item menu_item on menu_item.id = si.menu_item_id
+            where o.order_id = :orderId
+              and o.is_deleted = false
+              and si.is_deleted = false
+              and menu_item.menu_type = 'DIRECT'
+            """, nativeQuery = true)
     List<Long> findDistinctDirectMenuIdsByOrderId(@Param("orderId") String orderId);
 
-    @Query("""
-            select distinct menuItem.id
-            from SaleItem si
-            join si.order o
-            join si.menuItem menuItem
-            where o.orderId = :orderId
-              and o.isDeleted = false
-              and si.isDeleted = false
-              and menuItem.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED
-            """)
+    @Query(value = """
+            select distinct menu_item.id
+            from sale_item si
+            join orders o on o.id = si.order_id
+            join menu_item menu_item on menu_item.id = si.menu_item_id
+            where o.order_id = :orderId
+              and o.is_deleted = false
+              and si.is_deleted = false
+              and menu_item.menu_type = 'PREPARED'
+            """, nativeQuery = true)
     List<Long> findDistinctPreparedMenuIdsByOrderId(@Param("orderId") String orderId);
 
     @Query("""

@@ -17,7 +17,7 @@ public record OrderSaleItemResponse(
     public static OrderSaleItemResponse fromEntity(SaleItem saleItem) {
         return new OrderSaleItemResponse(
                 saleItem.getSaleItemId(),
-                saleItem.getMenuItem() == null ? null : saleItem.getMenuItem().getId(),
+                saleItem.getMenuItemId(),
                 saleItem.getSaleItemName(),
                 saleItem.getSaleItemPrice(),
                 saleItem.getAmount(),
