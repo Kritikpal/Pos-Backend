@@ -15,7 +15,7 @@ public class StockReceiptItemResponse {
     private Long menuItemId;
     private Long categoryId;
     private String categoryName;
-    private Integer quantityReceived;
+    private Double quantityReceived;
     private Double unitCost;
     private Double totalCost;
 

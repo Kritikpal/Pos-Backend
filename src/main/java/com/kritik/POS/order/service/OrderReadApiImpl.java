@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +24,7 @@ public class OrderReadApiImpl implements OrderReadApi {
     private final ConfiguredSaleItemRepository configuredSaleItemRepository;
 
     @Override
+    @Transactional(readOnly = true)
     public OrderInvoiceSnapshot getInvoiceSnapshot(String orderId) {
         Order order = orderRepository.findByIdWithItems(orderId)
                 .orElseThrow(OrderException::new);

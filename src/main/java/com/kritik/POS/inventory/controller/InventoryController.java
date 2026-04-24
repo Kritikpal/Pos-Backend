@@ -9,23 +9,13 @@ import com.kritik.POS.inventory.models.request.PreparedStockUpdateRequest;
 import com.kritik.POS.inventory.models.request.ProductionEntryCreateRequest;
 import com.kritik.POS.inventory.models.request.StockUpdateRequest;
 import com.kritik.POS.inventory.models.request.SupplierRequest;
-import com.kritik.POS.inventory.models.response.IngredientImportCommitResponse;
-import com.kritik.POS.inventory.models.response.IngredientImportPreviewResponse;
-import com.kritik.POS.inventory.models.response.IngredientResponse;
-import com.kritik.POS.inventory.models.response.MenuItemIngredientDto;
-import com.kritik.POS.inventory.models.response.PreparedStockResponseDto;
-import com.kritik.POS.inventory.models.response.ProductionEntryResponseDto;
-import com.kritik.POS.inventory.models.response.ProductionEntrySummaryDto;
-import com.kritik.POS.inventory.models.response.StockResponse;
+import com.kritik.POS.inventory.models.response.*;
 import com.kritik.POS.inventory.projection.IngredientStockListProjection;
 import com.kritik.POS.inventory.route.InventoryRoute;
 import com.kritik.POS.inventory.service.IngredientImportService;
 import com.kritik.POS.inventory.service.IngredientService;
 import com.kritik.POS.inventory.service.InventoryService;
 import com.kritik.POS.inventory.service.PreparedStockService;
-import com.kritik.POS.inventory.models.response.StockResponseDto;
-import com.kritik.POS.inventory.models.response.SupplierResponse;
-import com.kritik.POS.inventory.models.response.SupplierResponseDto;
 import com.kritik.POS.inventory.service.ProductionEntryService;
 import com.kritik.POS.inventory.service.SupplierService;
 import com.kritik.POS.swagger.SwaggerTags;
@@ -80,11 +70,17 @@ public class InventoryController {
     }
 
 
-
     @Tag(name = SwaggerTags.STOCK)
     @GetMapping(InventoryRoute.GET_STOCK)
     public ResponseEntity<ApiResponse<StockResponse>> getStock(@PathVariable String sku) {
         return ResponseEntity.ok(ApiResponse.SUCCESS(inventoryService.getStockBySku(sku)));
+    }
+
+
+    @Tag(name = SwaggerTags.STOCK)
+    @GetMapping(InventoryRoute.GET_UNITS)
+    public ResponseEntity<ApiResponse<List<UnitSummaryResponse>>> getAllUnits() {
+        return ResponseEntity.ok(ApiResponse.SUCCESS(inventoryService.getAllUnits()));
     }
 
     @Tag(name = SwaggerTags.STOCK)

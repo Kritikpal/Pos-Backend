@@ -13,7 +13,7 @@ public record StockReceiptResponseDto(
         String invoiceNumber,
         LocalDateTime receivedAt,
         Integer totalItems,
-        Integer totalQuantity,
+        Double totalQuantity,
         Double totalCost,
         LocalDateTime createdAt
 ) {

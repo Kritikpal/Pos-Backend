@@ -4,10 +4,7 @@ import com.kritik.POS.common.model.PageResponse;
 import com.kritik.POS.inventory.api.StockRequest;
 import com.kritik.POS.inventory.models.request.ItemStockUpsertRequest;
 import com.kritik.POS.inventory.models.request.StockUpdateRequest;
-import com.kritik.POS.inventory.models.response.MenuItemIngredientDto;
-import com.kritik.POS.inventory.models.response.StockReport;
-import com.kritik.POS.inventory.models.response.StockResponse;
-import com.kritik.POS.inventory.models.response.StockResponseDto;
+import com.kritik.POS.inventory.models.response.*;
 import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.restaurant.entity.MenuItem;
 
@@ -25,6 +22,8 @@ public interface InventoryService {
 
 
     StockResponse getStockBySku(String sku);
+
+    List<UnitSummaryResponse> getAllUnits();
 
     StockResponse saveStock(ItemStockUpsertRequest itemStockUpsertRequest);
 

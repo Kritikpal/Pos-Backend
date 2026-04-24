@@ -39,7 +39,7 @@ public class StockReceipt {
     private Integer totalItems = 0;
 
     @Column(nullable = false)
-    private Integer totalQuantity = 0;
+    private Double totalQuantity = 0.0;
 
     @Column(nullable = false)
     private Double totalCost = 0.0;

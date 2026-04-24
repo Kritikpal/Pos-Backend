@@ -4,29 +4,26 @@ import com.kritik.POS.common.model.PageResponse;
 import com.kritik.POS.exception.errors.AppException;
 import com.kritik.POS.exception.errors.StockException;
 import com.kritik.POS.inventory.api.StockRequest;
+import com.kritik.POS.inventory.entity.enums.UnitConversionSourceType;
 import com.kritik.POS.inventory.models.request.ItemStockUpsertRequest;
 import com.kritik.POS.inventory.models.request.StockUpdateRequest;
-import com.kritik.POS.inventory.models.response.MenuItemIngredientDto;
-import com.kritik.POS.inventory.models.response.StockReport;
-import com.kritik.POS.inventory.models.response.StockResponse;
+import com.kritik.POS.inventory.models.response.*;
 import com.kritik.POS.inventory.projection.PreparedStockDeductionProjection;
 import com.kritik.POS.inventory.entity.stock.PreparedItemStock;
-import com.kritik.POS.inventory.repository.PreparedItemStockRepository;
+import com.kritik.POS.inventory.repository.*;
 import com.kritik.POS.inventory.service.InventoryService;
 import com.kritik.POS.inventory.util.InventoryUtil;
 import com.kritik.POS.order.entity.Order;
 import com.kritik.POS.order.model.response.DirectStockDeductionProjection;
 import com.kritik.POS.order.model.response.IngredientStockDeductionProjection;
 import com.kritik.POS.order.repository.SaleItemRepository;
-import com.kritik.POS.inventory.models.response.StockResponseDto;
 import com.kritik.POS.inventory.entity.stock.IngredientStock;
 import com.kritik.POS.inventory.entity.stock.ItemStock;
 import com.kritik.POS.inventory.entity.enums.MenuStockStrategy;
+import com.kritik.POS.inventory.entity.unit.UnitMaster;
 import com.kritik.POS.restaurant.entity.MenuItem;
-import com.kritik.POS.inventory.repository.IngredientStockRepository;
-import com.kritik.POS.inventory.repository.MenuItemIngredientRepository;
 import com.kritik.POS.restaurant.repository.MenuItemRepository;
-import com.kritik.POS.inventory.repository.StockRepository;
+import com.kritik.POS.inventory.service.ItemUnitConversionService;
 import com.kritik.POS.restaurant.specification.MenuItemSpecification;
 import com.kritik.POS.inventory.util.InventoryAvailabilityUtil;
 import com.kritik.POS.security.service.TenantAccessService;
@@ -54,6 +51,8 @@ public class InventoryServiceImpl implements InventoryService {
     private final TenantAccessService tenantAccessService;
     private final InventoryUtil inventoryUtil;
     private final PreparedItemStockRepository preparedItemStockRepository;
+    private final ItemUnitConversionService itemUnitConversionService;
+    private final UnitMasterRepository unitMasterRepository;
 
 
     @Override
@@ -103,7 +102,12 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public StockResponse getStockBySku(String sku) {
-        return StockResponse.fromEntity(inventoryUtil.getAccessibleStock(sku));
+        return enrichStockResponse(inventoryUtil.getAccessibleStock(sku));
+    }
+
+    @Override
+    public List<UnitSummaryResponse> getAllUnits() {
+        return unitMasterRepository.findAll().stream().map(UnitSummaryResponse::fromEntity).toList();
     }
 
     @Override
@@ -125,11 +129,13 @@ public class InventoryServiceImpl implements InventoryService {
         itemStock.setRestaurantId(menuItem.getRestaurantId());
         itemStock.setTotalStock(itemStock.getTotalStock() == null ? 0 : itemStock.getTotalStock());
         itemStock.setReorderLevel(itemStockUpsertRequest.reorderLevel() == null ? 0 : itemStockUpsertRequest.reorderLevel());
-        itemStock.setUnitOfMeasure(
-                itemStockUpsertRequest.unitOfMeasure() == null || itemStockUpsertRequest.unitOfMeasure().isBlank()
-                        ? "unit"
-                        : itemStockUpsertRequest.unitOfMeasure().trim()
+        UnitMaster baseUnit = itemUnitConversionService.resolveBaseUnit(
+                itemStockUpsertRequest.baseUnitId(),
+                itemStockUpsertRequest.unitOfMeasure(),
+                menuItem.getBaseUnit() == null ? itemStock.getUnitOfMeasure() : menuItem.getBaseUnit().getCode()
         );
+        menuItem.setBaseUnit(baseUnit);
+        itemStock.setUnitOfMeasure(baseUnit.getCode());
         itemStock.setSupplier(itemStockUpsertRequest.supplierId() == null
                 ? null
                 : inventoryUtil.getAccessibleSupplier(itemStockUpsertRequest.supplierId(), menuItem.getRestaurantId()));
@@ -137,7 +143,15 @@ public class InventoryServiceImpl implements InventoryService {
         itemStock.setIsActive(itemStockUpsertRequest.isActive() != null ? itemStockUpsertRequest.isActive() : Boolean.TRUE);
 
         InventoryUtil.syncMenuAvailability(menuItem);
-        return StockResponse.fromEntity(stockRepository.save(itemStock));
+        ItemStock savedStock = stockRepository.save(itemStock);
+        itemUnitConversionService.updateConversionsForExistingItem(
+                menuItem.getRestaurantId(),
+                UnitConversionSourceType.DIRECT_ITEM,
+                String.valueOf(menuItem.getId()),
+                baseUnit,
+                itemStockUpsertRequest.conversions()
+        );
+        return enrichStockResponse(savedStock);
     }
 
     @Override
@@ -147,8 +161,21 @@ public class InventoryServiceImpl implements InventoryService {
         if (stockUpdateRequest.reorderLevel() != null) {
             itemStock.setReorderLevel(stockUpdateRequest.reorderLevel());
         }
-        if (stockUpdateRequest.unitOfMeasure() != null && !stockUpdateRequest.unitOfMeasure().isBlank()) {
-            itemStock.setUnitOfMeasure(stockUpdateRequest.unitOfMeasure().trim());
+        if (stockUpdateRequest.baseUnitId() != null || (stockUpdateRequest.unitOfMeasure() != null && !stockUpdateRequest.unitOfMeasure().isBlank())) {
+            UnitMaster baseUnit = itemUnitConversionService.resolveBaseUnit(
+                    stockUpdateRequest.baseUnitId(),
+                    stockUpdateRequest.unitOfMeasure(),
+                    itemStock.getMenuItem().getBaseUnit() == null ? itemStock.getUnitOfMeasure() : itemStock.getMenuItem().getBaseUnit().getCode()
+            );
+            itemStock.getMenuItem().setBaseUnit(baseUnit);
+            itemStock.setUnitOfMeasure(baseUnit.getCode());
+            itemUnitConversionService.updateConversionsForExistingItem(
+                    itemStock.getRestaurantId(),
+                    UnitConversionSourceType.DIRECT_ITEM,
+                    String.valueOf(itemStock.getMenuItem().getId()),
+                    baseUnit,
+                    stockUpdateRequest.conversions()
+            );
         }
         if (stockUpdateRequest.isActive() != null) {
             itemStock.setIsActive(stockUpdateRequest.isActive());
@@ -157,7 +184,7 @@ public class InventoryServiceImpl implements InventoryService {
             itemStock.setSupplier(inventoryUtil.getAccessibleSupplier(stockUpdateRequest.supplierId(), itemStock.getRestaurantId()));
         }
         InventoryUtil.syncMenuAvailability(itemStock);
-        return StockResponse.fromEntity(stockRepository.save(itemStock));
+        return enrichStockResponse(stockRepository.save(itemStock));
     }
 
 
@@ -446,6 +473,18 @@ public class InventoryServiceImpl implements InventoryService {
                 throw new StockException("Prepared stock is not available for menu item " + entry.getKey());
             }
         }
+    }
+
+    private StockResponse enrichStockResponse(ItemStock itemStock) {
+        StockResponse response = StockResponse.fromEntity(itemStock);
+        response.setConversions(itemUnitConversionService.getConversions(
+                        itemStock.getRestaurantId(),
+                        UnitConversionSourceType.DIRECT_ITEM,
+                        String.valueOf(itemStock.getMenuItem().getId()))
+                .stream()
+                .map(ItemUnitConversionResponse::fromEntity)
+                .toList());
+        return response;
     }
 
 

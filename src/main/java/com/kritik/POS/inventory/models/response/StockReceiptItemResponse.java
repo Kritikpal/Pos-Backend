@@ -15,7 +15,9 @@ public class StockReceiptItemResponse {
     private Long menuItemId;
     private Long categoryId;
     private String categoryName;
-    private Integer quantityReceived;
+    private Double quantityReceived;
+    private Double enteredQty;
+    private UnitSummaryResponse unit;
     private Double unitCost;
     private Double totalCost;
 
@@ -41,6 +43,8 @@ public class StockReceiptItemResponse {
         }
 
         response.setQuantityReceived(item.getQuantityReceived());
+        response.setEnteredQty(item.getEnteredQty());
+        response.setUnit(UnitSummaryResponse.fromEntity(item.getUnit()));
         response.setUnitCost(item.getUnitCost());
         response.setTotalCost(item.getTotalCost());
         return response;

@@ -14,6 +14,8 @@ public record StockResponseDto(
         Integer totalStock,
         Integer reorderLevel,
         String unitOfMeasure,
+        Long baseUnitId,
+        String baseUnitCode,
         Boolean lowStock,
         Long supplierId,
         String supplierName,
@@ -33,6 +35,8 @@ public record StockResponseDto(
                 projection.getTotalStock(),
                 projection.getReorderLevel(),
                 projection.getUnitOfMeasure(),
+                projection.getBaseUnitId(),
+                projection.getBaseUnitCode(),
                 projection.getTotalStock() != null
                         && projection.getReorderLevel() != null
                         && projection.getTotalStock() <= projection.getReorderLevel(),

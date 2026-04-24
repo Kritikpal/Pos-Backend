@@ -12,11 +12,14 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.Data;
+import lombok.ToString;
+import org.hibernate.Hibernate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Data
 @Entity
@@ -29,6 +32,7 @@ public class ConfiguredSaleItem {
 
     @ManyToOne
     @JoinColumn(name = "order_id", nullable = false)
+    @ToString.Exclude
     private Order order;
 
     @Column(name = "configured_template_id", nullable = false)
@@ -90,6 +94,7 @@ public class ConfiguredSaleItem {
 
     @OneToMany(mappedBy = "configuredSaleItem", cascade = CascadeType.ALL, orphanRemoval = true)
     @jakarta.persistence.OrderBy("id asc")
+    @ToString.Exclude
     private List<ConfiguredSaleItemSelection> selections = new ArrayList<>();
 
     @Version
@@ -113,5 +118,22 @@ public class ConfiguredSaleItem {
     @jakarta.persistence.PreUpdate
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || Hibernate.getClass(this) != Hibernate.getClass(o)) {
+            return false;
+        }
+        ConfiguredSaleItem that = (ConfiguredSaleItem) o;
+        return id != null && Objects.equals(id, that.id);
+    }
+
+    @Override
+    public final int hashCode() {
+        return Hibernate.getClass(this).hashCode();
     }
 }

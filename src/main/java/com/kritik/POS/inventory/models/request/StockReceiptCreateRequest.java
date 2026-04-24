@@ -22,15 +22,16 @@ public record StockReceiptCreateRequest(
         String notes,
         @NotEmpty(message = "At least one receipt item is required")
         List<@Valid ReceiptItemRequest> items
-) {
+    ) {
     public record ReceiptItemRequest(
             @NotBlank(message = "SKU is required")
             String sku,
-            @NotNull(message = "SKU type is required")
             StockReceiptSkuType skuType,
-            @NotNull(message = "Quantity received is required")
+            @DecimalMin(value = "0.000001", message = "Entered quantity must be greater than 0")
+            Double enteredQty,
             @Min(value = 1, message = "Quantity received must be at least 1")
             Integer quantityReceived,
+            Long unitId,
             @NotNull(message = "Unit cost is required")
             @DecimalMin(value = "0.0", message = "Unit cost must be 0 or greater")
             Double unitCost

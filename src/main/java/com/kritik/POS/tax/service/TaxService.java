@@ -3,6 +3,8 @@ package com.kritik.POS.tax.service;
 import com.kritik.POS.common.model.PageResponse;
 import com.kritik.POS.tax.dto.TaxClassRequest;
 import com.kritik.POS.tax.dto.TaxClassResponseDto;
+import com.kritik.POS.tax.dto.TaxCatalogSeedRequest;
+import com.kritik.POS.tax.dto.TaxCatalogSeedResponse;
 import com.kritik.POS.tax.dto.TaxDefinitionRequest;
 import com.kritik.POS.tax.dto.TaxDefinitionResponseDto;
 import com.kritik.POS.tax.dto.TaxRegistrationRequest;
@@ -41,6 +43,8 @@ public interface TaxService {
     PageResponse<TaxRuleResponseDto> getTaxRulePage(Long chainId, Long restaurantId, Boolean isActive, Integer pageNumber, Integer pageSize);
 
     PageResponse<TaxRegistrationResponseDto> getTaxRegistrationPage(Long chainId, Long restaurantId, Boolean isActive, Integer pageNumber, Integer pageSize);
+
+    TaxCatalogSeedResponse seedTaxCatalog(TaxCatalogSeedRequest request);
 
     TaxClass getOrCreateDefaultTaxClass(Long restaurantId);
 

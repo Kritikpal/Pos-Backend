@@ -2,6 +2,7 @@ package com.kritik.POS.tax.entity;
 
 import com.kritik.POS.tax.entity.enums.TaxCalculationMode;
 import com.kritik.POS.tax.entity.enums.TaxCompoundMode;
+import com.kritik.POS.tax.entity.enums.TaxSupplyScope;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -62,6 +63,10 @@ public class TaxRule {
 
     @Column(name = "region_code", length = 20)
     private String regionCode;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "supply_scope", nullable = false, length = 20)
+    private TaxSupplyScope supplyScope = TaxSupplyScope.ANY;
 
     @Column(name = "buyer_tax_category", length = 60)
     private String buyerTaxCategory;

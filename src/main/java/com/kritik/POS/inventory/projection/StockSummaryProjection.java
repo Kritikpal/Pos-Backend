@@ -12,6 +12,8 @@ public interface StockSummaryProjection {
     Integer getTotalStock();
     Integer getReorderLevel();
     String getUnitOfMeasure();
+    Long getBaseUnitId();
+    String getBaseUnitCode();
     Long getSupplierId();
     String getSupplierName();
     Boolean getIsActive();

@@ -4,6 +4,8 @@ import com.kritik.POS.common.model.ApiResponse;
 import com.kritik.POS.common.model.PageResponse;
 import com.kritik.POS.tax.dto.TaxClassRequest;
 import com.kritik.POS.tax.dto.TaxClassResponseDto;
+import com.kritik.POS.tax.dto.TaxCatalogSeedRequest;
+import com.kritik.POS.tax.dto.TaxCatalogSeedResponse;
 import com.kritik.POS.tax.dto.TaxDefinitionRequest;
 import com.kritik.POS.tax.dto.TaxDefinitionResponseDto;
 import com.kritik.POS.tax.dto.TaxRegistrationRequest;
@@ -115,5 +117,13 @@ public class TaxController {
     @DeleteMapping(TaxRoute.DELETE_TAX_REGISTRATION)
     public ApiResponse<Boolean> deleteTaxRegistration(@PathVariable Long id) {
         return ApiResponse.SUCCESS(taxService.deleteTaxRegistration(id), "Tax registration deleted successfully");
+    }
+
+    @PostMapping(TaxRoute.SEED_TAX_CATALOG)
+    public ApiResponse<TaxCatalogSeedResponse> seedTaxCatalog(@RequestBody @Valid TaxCatalogSeedRequest request) {
+        return ApiResponse.SUCCESS(
+                taxService.seedTaxCatalog(request),
+                "Tax catalog seeded successfully"
+        );
     }
 }

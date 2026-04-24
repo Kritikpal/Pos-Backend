@@ -11,13 +11,13 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: create
+      ddl-auto: update
     open-in-view: false
   mail:
     host: smtp.gmail.com
     port: 587
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
+    username: ${MAIL_USERNAME:kritikpal123@gmail.com}
+    password: ${MAIL_PASSWORD:fqzh mhov ldck lyxm}
     properties:
       mail.smtp.auth: true
       mail.smtp.starttls.enable: true

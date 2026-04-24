@@ -102,7 +102,7 @@ public class RestaurantServiceImpl implements RestaurantService {
                 pageable
         );
 
-        return PageResponse.from(page.map(restaurantDtoMapper::toMenuItemDto));
+         return PageResponse.from(page.map(restaurantDtoMapper::toMenuItemDto));
     }
 
     @Override

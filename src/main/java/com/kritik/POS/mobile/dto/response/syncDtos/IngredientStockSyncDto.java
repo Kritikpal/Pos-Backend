@@ -12,6 +12,8 @@ public record IngredientStockSyncDto(
         Double totalStock,
         Double reorderLevel,
         String unitOfMeasure,
+        Long baseUnitId,
+        String baseUnitCode,
         Boolean isActive,
         LocalDateTime lastRestockedAt,
         LocalDateTime updatedAt

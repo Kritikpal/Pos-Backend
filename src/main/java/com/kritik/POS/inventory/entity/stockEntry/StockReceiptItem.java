@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.kritik.POS.inventory.entity.stock.IngredientStock;
 import com.kritik.POS.inventory.entity.stock.ItemStock;
 import com.kritik.POS.inventory.entity.enums.StockReceiptSkuType;
+import com.kritik.POS.inventory.entity.unit.UnitMaster;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -41,7 +42,14 @@ public class StockReceiptItem {
     private String skuName;
 
     @Column(nullable = false)
-    private Integer quantityReceived;
+    private Double quantityReceived;
+
+    @Column(name = "entered_qty", nullable = false)
+    private Double enteredQty;
+
+    @ManyToOne
+    @JoinColumn(name = "unit_id")
+    private UnitMaster unit;
 
     @Column(nullable = false)
     private Double unitCost;

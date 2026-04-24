@@ -18,6 +18,7 @@ public class TaxRoute {
     public static final String GET_TAX_REGISTRATIONS = BASE + "/registrations";
     public static final String SAVE_TAX_REGISTRATION = BASE + "/registrations";
     public static final String DELETE_TAX_REGISTRATION = BASE + "/registrations/{id}";
+    public static final String SEED_TAX_CATALOG = BASE + "/catalog/seed";
 
     private TaxRoute() {
     }

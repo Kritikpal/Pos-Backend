@@ -11,7 +11,7 @@ public interface StockReceiptSummaryProjection {
     String getInvoiceNumber();
     LocalDateTime getReceivedAt();
     Integer getTotalItems();
-    Integer getTotalQuantity();
+    Double getTotalQuantity();
     Double getTotalCost();
     LocalDateTime getCreatedAt();
 }

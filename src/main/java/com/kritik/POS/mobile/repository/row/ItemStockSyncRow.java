@@ -11,6 +11,8 @@ public record ItemStockSyncRow(
         Integer totalStock,
         Integer reorderLevel,
         String unitOfMeasure,
+        Long baseUnitId,
+        String baseUnitCode,
         Boolean isActive,
         Boolean isDeleted,
         LocalDateTime lastRestockedAt,

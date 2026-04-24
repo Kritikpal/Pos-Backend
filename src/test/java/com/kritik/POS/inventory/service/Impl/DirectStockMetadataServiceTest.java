@@ -1,6 +1,7 @@
 package com.kritik.POS.inventory.service.Impl;
 
 import com.kritik.POS.inventory.entity.stock.ItemStock;
+import com.kritik.POS.inventory.entity.unit.UnitMaster;
 import com.kritik.POS.inventory.models.request.ItemStockUpsertRequest;
 import com.kritik.POS.inventory.models.request.StockUpdateRequest;
 import com.kritik.POS.inventory.models.response.StockResponse;
@@ -8,6 +9,7 @@ import com.kritik.POS.inventory.repository.IngredientStockRepository;
 import com.kritik.POS.inventory.repository.MenuItemIngredientRepository;
 import com.kritik.POS.inventory.repository.PreparedItemStockRepository;
 import com.kritik.POS.inventory.repository.StockRepository;
+import com.kritik.POS.inventory.service.ItemUnitConversionService;
 import com.kritik.POS.inventory.util.InventoryUtil;
 import com.kritik.POS.order.repository.SaleItemRepository;
 import com.kritik.POS.restaurant.entity.Category;
@@ -55,20 +57,27 @@ class DirectStockMetadataServiceTest {
     @Mock
     private InventoryUtil inventoryUtil;
 
+    @Mock
+    private ItemUnitConversionService itemUnitConversionService;
+
     @InjectMocks
     private InventoryServiceImpl inventoryService;
 
     @Test
     void saveStockCreatesMetadataOnlyStockWithZeroQuantity() {
         MenuItem menuItem = directMenuItem();
+        UnitMaster unitMaster = unit("PCS");
         when(tenantAccessService.isSuperAdmin()).thenReturn(true);
         when(menuItemRepository.findOne(any(Specification.class))).thenReturn(Optional.of(menuItem));
+        when(itemUnitConversionService.resolveBaseUnit(null, "PCS", "unit")).thenReturn(unitMaster);
         when(stockRepository.save(any(ItemStock.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         StockResponse response = inventoryService.saveStock(new ItemStockUpsertRequest(
                 10L,
                 3,
+                null,
                 "PCS",
+                null,
                 null,
                 true
         ));
@@ -80,6 +89,7 @@ class DirectStockMetadataServiceTest {
 
     @Test
     void updateStockPreservesExistingQuantity() {
+        UnitMaster unitMaster = unit("UNIT");
         ItemStock itemStock = new ItemStock();
         itemStock.setSku("SKU-1");
         itemStock.setRestaurantId(10L);
@@ -91,11 +101,14 @@ class DirectStockMetadataServiceTest {
         itemStock.setIsDeleted(false);
 
         when(inventoryUtil.getAccessibleStock("SKU-1")).thenReturn(itemStock);
+        when(itemUnitConversionService.resolveBaseUnit(null, "UNIT", "PCS")).thenReturn(unitMaster);
         when(stockRepository.save(any(ItemStock.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         StockResponse response = inventoryService.updateStock("SKU-1", new StockUpdateRequest(
                 4,
+                null,
                 "UNIT",
+                null,
                 null,
                 false
         ));
@@ -124,5 +137,14 @@ class DirectStockMetadataServiceTest {
         menuItem.setIsAvailable(true);
         menuItem.setCategory(category);
         return menuItem;
+    }
+
+    private UnitMaster unit(String code) {
+        UnitMaster unitMaster = new UnitMaster();
+        unitMaster.setId(1L);
+        unitMaster.setCode(code);
+        unitMaster.setDisplayName(code);
+        unitMaster.setActive(true);
+        return unitMaster;
     }
 }

@@ -18,11 +18,11 @@ import java.util.Optional;
 
 public interface StockRepository extends JpaRepository<ItemStock, String> {
 
-    @EntityGraph(attributePaths = {"menuItem", "menuItem.category", "supplier"})
+    @EntityGraph(attributePaths = {"menuItem", "menuItem.category", "menuItem.baseUnit", "supplier"})
     Optional<ItemStock> findBySkuAndIsDeletedFalse(String sku);
 
 
-    @EntityGraph(attributePaths = {"menuItem", "menuItem.category", "supplier"})
+    @EntityGraph(attributePaths = {"menuItem", "menuItem.category", "menuItem.baseUnit", "supplier"})
     @Query("""
             select s
             from ItemStock s
@@ -43,6 +43,8 @@ public interface StockRepository extends JpaRepository<ItemStock, String> {
                    s.totalStock as totalStock,
                    s.reorderLevel as reorderLevel,
                    s.unitOfMeasure as unitOfMeasure,
+                   m.baseUnit.id as baseUnitId,
+                   coalesce(m.baseUnit.code, s.unitOfMeasure) as baseUnitCode,
                    sup.supplierId as supplierId,
                    sup.supplierName as supplierName,
                    s.isActive as isActive,
@@ -95,6 +97,23 @@ public interface StockRepository extends JpaRepository<ItemStock, String> {
     List<StockReceiptSkuProjection> findReceiptSkuOptions(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
                                                           @Param("restaurantIds") Collection<Long> restaurantIds,
                                                           @Param("supplierId") Long supplierId);
+
+    @EntityGraph(attributePaths = {"menuItem", "menuItem.category", "menuItem.baseUnit", "supplier"})
+    @Query("""
+            select s
+            from ItemStock s
+            join s.menuItem m
+            left join s.supplier sup
+            where s.isDeleted = false
+              and m.isDeleted = false
+              and m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.DIRECT
+              and (:skipRestaurantFilter = true or s.restaurantId in :restaurantIds)
+              and (:supplierId is null or sup.supplierId = :supplierId)
+            order by lower(m.itemName), s.sku
+            """)
+    List<ItemStock> findReceiptStocks(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                      @Param("restaurantIds") Collection<Long> restaurantIds,
+                                      @Param("supplierId") Long supplierId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("""

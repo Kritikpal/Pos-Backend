@@ -2,6 +2,7 @@ package com.kritik.POS.inventory.route;
 
 public final class InventoryRoute {
     public static final String BASE = "/api/inventory";
+    public static final String GET_UNITS = "/unit-masters";
 
     public static final String MENU_INGREDIENT_MAPPING = "/menuIngredientMapping";
     public static final String SEARCH_RECIPE_MENU_ITEMS = "/recipes/menu-items";

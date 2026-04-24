@@ -2,6 +2,7 @@ package com.kritik.POS.inventory.models.response;
 
 import com.kritik.POS.inventory.entity.stock.IngredientStock;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.Data;
 
 @Data
@@ -14,6 +15,8 @@ public class IngredientResponse {
     private Double totalStock;
     private Double reorderLevel;
     private String unitOfMeasure;
+    private UnitSummaryResponse baseUnit;
+    private List<ItemUnitConversionResponse> conversions;
     private Boolean lowStock;
     private Boolean isActive;
     private LocalDateTime lastRestockedAt;
@@ -31,6 +34,7 @@ public class IngredientResponse {
         response.setTotalStock(ingredientStock.getTotalStock());
         response.setReorderLevel(ingredientStock.getReorderLevel());
         response.setUnitOfMeasure(ingredientStock.getUnitOfMeasure());
+        response.setBaseUnit(UnitSummaryResponse.fromEntity(ingredientStock.getBaseUnit()));
         response.setLowStock(ingredientStock.getTotalStock() != null
                 && ingredientStock.getReorderLevel() != null
                 && ingredientStock.getTotalStock() <= ingredientStock.getReorderLevel());

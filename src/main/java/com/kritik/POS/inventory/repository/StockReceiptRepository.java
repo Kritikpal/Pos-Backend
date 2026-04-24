@@ -20,10 +20,14 @@ public interface StockReceiptRepository extends JpaRepository<StockReceipt, Long
     @EntityGraph(attributePaths = {
             "supplier",
             "receiptItems",
+            "receiptItems.unit",
             "receiptItems.itemStock",
             "receiptItems.ingredientStock",
             "receiptItems.itemStock.menuItem",
-            "receiptItems.itemStock.menuItem.category"
+            "receiptItems.itemStock.menuItem.category",
+            "receiptItems.itemStock.menuItem.baseUnit",
+            "receiptItems.ingredientStock.ingredient",
+            "receiptItems.ingredientStock.ingredient.baseUnit"
     })
     Optional<StockReceipt> findByReceiptIdAndIsDeletedFalse(Long receiptId);
 

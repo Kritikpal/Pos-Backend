@@ -18,7 +18,7 @@ import java.util.Optional;
 
 public interface IngredientStockRepository extends JpaRepository<IngredientStock, String> {
 
-    @EntityGraph(attributePaths = {"supplier"})
+    @EntityGraph(attributePaths = {"supplier", "ingredient", "ingredient.baseUnit", "ingredient.supplier"})
     Optional<IngredientStock> findBySkuAndIsDeletedFalse(String sku);
 
     @EntityGraph(attributePaths = {"supplier"})
@@ -88,14 +88,28 @@ public interface IngredientStockRepository extends JpaRepository<IngredientStock
 
 
 
-    @EntityGraph(attributePaths = {"supplier"})
+    @EntityGraph(attributePaths = {"supplier", "ingredient", "ingredient.baseUnit", "ingredient.supplier"})
     List<IngredientStock> findAllBySkuInAndIsDeletedFalse(Collection<String> skus);
 
-    @EntityGraph(attributePaths = {"supplier"})
+    @EntityGraph(attributePaths = {"supplier", "ingredient", "ingredient.baseUnit", "ingredient.supplier"})
     List<IngredientStock> findAllBySkuIn(Collection<String> skus);
 
-    @EntityGraph(attributePaths = {"supplier"})
+    @EntityGraph(attributePaths = {"supplier", "ingredient", "ingredient.baseUnit", "ingredient.supplier"})
     List<IngredientStock> findAllByRestaurantIdAndIsDeletedFalse(Long restaurantId);
+
+    @EntityGraph(attributePaths = {"supplier", "ingredient", "ingredient.baseUnit", "ingredient.supplier"})
+    @Query("""
+            select i
+            from IngredientStock i
+            left join i.supplier sup
+            where i.isDeleted = false
+              and (:skipRestaurantFilter = true or i.restaurantId in :restaurantIds)
+              and (:supplierId is null or sup.supplierId = :supplierId)
+            order by lower(i.ingredientName), i.sku
+            """)
+    List<IngredientStock> findReceiptIngredients(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
+                                                 @Param("restaurantIds") Collection<Long> restaurantIds,
+                                                 @Param("supplierId") Long supplierId);
 
     @Query("""
             select i.sku as sku,

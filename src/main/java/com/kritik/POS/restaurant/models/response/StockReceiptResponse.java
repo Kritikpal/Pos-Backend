@@ -15,7 +15,7 @@ public class StockReceiptResponse {
     private String invoiceNumber;
     private LocalDateTime receivedAt;
     private Integer totalItems;
-    private Integer totalQuantity;
+    private Double totalQuantity;
     private Double totalCost;
     private String notes;
     private LocalDateTime createdAt;

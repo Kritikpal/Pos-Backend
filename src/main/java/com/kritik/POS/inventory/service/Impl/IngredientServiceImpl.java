@@ -1,11 +1,17 @@
 package com.kritik.POS.inventory.service.Impl;
 
 import com.kritik.POS.common.model.PageResponse;
+import com.kritik.POS.inventory.entity.enums.UnitConversionSourceType;
+import com.kritik.POS.inventory.entity.master.Ingredient;
 import com.kritik.POS.inventory.entity.stock.IngredientStock;
+import com.kritik.POS.inventory.entity.unit.UnitMaster;
 import com.kritik.POS.inventory.models.request.IngredientRequest;
 import com.kritik.POS.inventory.models.response.IngredientResponse;
+import com.kritik.POS.inventory.models.response.ItemUnitConversionResponse;
 import com.kritik.POS.inventory.projection.IngredientStockListProjection;
+import com.kritik.POS.inventory.repository.IngredientRepository;
 import com.kritik.POS.inventory.repository.IngredientStockRepository;
+import com.kritik.POS.inventory.service.ItemUnitConversionService;
 import com.kritik.POS.inventory.service.IngredientService;
 import com.kritik.POS.inventory.util.InventoryUtil;
 import com.kritik.POS.security.service.TenantAccessService;
@@ -26,6 +32,8 @@ public class IngredientServiceImpl implements IngredientService {
     private final InventoryUtil inventoryUtil;
     private final TenantAccessService tenantAccessService;
     private final IngredientStockRepository ingredientStockRepository;
+    private final IngredientRepository ingredientRepository;
+    private final ItemUnitConversionService itemUnitConversionService;
 
     @Override
     public PageResponse<IngredientResponse> getIngredientPage(Long chainId, Long restaurantId, Boolean isActive, Boolean lowStockOnly, String search, Integer pageNumber, Integer pageSize) {
@@ -66,7 +74,16 @@ public class IngredientServiceImpl implements IngredientService {
 
     @Override
     public IngredientResponse getIngredientBySku(String sku) {
-        return IngredientResponse.fromEntity(inventoryUtil.getAccessibleIngredient(sku));
+        IngredientStock ingredientStock = inventoryUtil.getAccessibleIngredient(sku);
+        IngredientResponse response = IngredientResponse.fromEntity(ingredientStock);
+        response.setConversions(itemUnitConversionService.getConversions(
+                        ingredientStock.getRestaurantId(),
+                        UnitConversionSourceType.INGREDIENT,
+                        ingredientStock.getSku())
+                .stream()
+                .map(ItemUnitConversionResponse::fromEntity)
+                .toList());
+        return response;
     }
 
     @Transactional
@@ -83,34 +100,71 @@ public class IngredientServiceImpl implements IngredientService {
         if (ingredientStock.getSku() == null) {
             ingredientStock.setSku(UUID.randomUUID().toString());
         }
-        ingredientStock.setRestaurantId(restaurantId);
-        ingredientStock.setIngredientName(ingredientRequest.ingredientName().trim());
-        ingredientStock.setDescription(InventoryUtil.trimToNull(ingredientRequest.description()));
-        ingredientStock.setCategory(InventoryUtil.trimToNull(ingredientRequest.category()));
-        ingredientStock.setSupplier(ingredientRequest.supplierId() == null
+        Ingredient ingredient = ingredientRepository.findById(ingredientStock.getSku()).orElseGet(Ingredient::new);
+        ingredient.setSku(ingredientStock.getSku());
+        ingredient.setRestaurantId(restaurantId);
+        ingredient.setIngredientName(ingredientRequest.ingredientName().trim());
+        ingredient.setDescription(InventoryUtil.trimToNull(ingredientRequest.description()));
+        ingredient.setCategory(InventoryUtil.trimToNull(ingredientRequest.category()));
+        ingredient.setSupplier(ingredientRequest.supplierId() == null
                 ? null
                 : inventoryUtil.getAccessibleSupplier(ingredientRequest.supplierId(), restaurantId));
+        UnitMaster baseUnit = itemUnitConversionService.resolveBaseUnit(
+                ingredientRequest.baseUnitId(),
+                ingredientRequest.unitOfMeasure(),
+                ingredient.getBaseUnit() == null ? ingredientStock.getUnitOfMeasure() : ingredient.getBaseUnit().getCode()
+        );
+        ingredient.setBaseUnit(baseUnit);
+        ingredient.setIsDeleted(false);
+        if (ingredientRequest.isActive() != null) {
+            ingredient.setIsActive(ingredientRequest.isActive());
+        }
+        ingredient = ingredientRepository.save(ingredient);
+
+        ingredientStock.setIngredient(ingredient);
+        ingredientStock.setRestaurantId(ingredient.getRestaurantId());
+        ingredientStock.setIngredientName(ingredient.getIngredientName());
+        ingredientStock.setDescription(ingredient.getDescription());
+        ingredientStock.setCategory(ingredient.getCategory());
+        ingredientStock.setSupplier(ingredient.getSupplier());
         ingredientStock.setTotalStock(ingredientStock.getTotalStock() == null ? 0.0 : ingredientStock.getTotalStock());
         ingredientStock.setReorderLevel(ingredientRequest.reorderLevel() == null ? 0.0 : ingredientRequest.reorderLevel());
-        ingredientStock.setUnitOfMeasure(
-                ingredientRequest.unitOfMeasure() == null || ingredientRequest.unitOfMeasure().isBlank()
-                        ? ingredientStock.getUnitOfMeasure() == null ? "unit" : ingredientStock.getUnitOfMeasure()
-                        : ingredientRequest.unitOfMeasure().trim()
-        );
+        ingredientStock.setUnitOfMeasure(baseUnit.getCode());
         ingredientStock.setIsDeleted(false);
         if (ingredientRequest.isActive() != null) {
             ingredientStock.setIsActive(ingredientRequest.isActive());
         }
 
         IngredientStock savedIngredient = ingredientStockRepository.save(ingredientStock);
+        itemUnitConversionService.updateConversionsForExistingItem(
+                restaurantId,
+                UnitConversionSourceType.INGREDIENT,
+                savedIngredient.getSku(),
+                baseUnit,
+                ingredientRequest.conversions()
+        );
         inventoryUtil.syncMenuAvailabilityForIngredient(savedIngredient.getSku());
-        return IngredientResponse.fromEntity(savedIngredient);
+        IngredientResponse response = IngredientResponse.fromEntity(savedIngredient);
+        response.setConversions(itemUnitConversionService.getConversions(
+                        restaurantId,
+                        UnitConversionSourceType.INGREDIENT,
+                        savedIngredient.getSku())
+                .stream()
+                .map(ItemUnitConversionResponse::fromEntity)
+                .toList());
+        return response;
     }
 
     @Transactional
     @Override
     public boolean deleteIngredient(String sku) {
         IngredientStock ingredientStock = inventoryUtil.getAccessibleIngredient(sku);
+        Ingredient ingredient = ingredientRepository.findById(sku).orElse(null);
+        if (ingredient != null) {
+            ingredient.setIsDeleted(true);
+            ingredient.setIsActive(false);
+            ingredientRepository.save(ingredient);
+        }
         ingredientStock.setIsDeleted(true);
         ingredientStock.setIsActive(false);
         ingredientStockRepository.save(ingredientStock);

@@ -5,6 +5,7 @@ import com.kritik.POS.inventory.entity.enums.MenuStockStrategy;
 import com.kritik.POS.inventory.entity.stock.ItemStock;
 import com.kritik.POS.inventory.entity.recipi.MenuItemIngredient;
 import com.kritik.POS.inventory.entity.stock.PreparedItemStock;
+import com.kritik.POS.inventory.models.response.UnitSummaryResponse;
 import com.kritik.POS.restaurant.entity.MenuItem;
 import com.kritik.POS.restaurant.entity.enums.MenuType;
 import com.kritik.POS.inventory.util.InventoryAvailabilityUtil;
@@ -36,6 +37,7 @@ public class MenuResponse {
     private Integer itemInStock;
     private Integer reorderLevel;
     private String unitOfMeasure;
+    private UnitSummaryResponse baseUnit;
     private Double availableQty;
     private Double reservedQty;
     private String unit;
@@ -101,6 +103,7 @@ public class MenuResponse {
                 menuItem.getCategory().getCategoryDescription(),
                 menuItem.getCategory().getIsActive()));
         menuResponse.setRecipeBased(InventoryAvailabilityUtil.hasRecipe(menuItem));
+        menuResponse.setBaseUnit(UnitSummaryResponse.fromEntity(menuItem.getBaseUnit()));
         PreparedItemStock preparedItemStock = menuItem.getPreparedItemStock();
         MenuStockStrategy stockStrategy = InventoryAvailabilityUtil.resolveStockStrategy(menuItem);
         if (stockStrategy == MenuStockStrategy.RECIPE || stockStrategy == MenuStockStrategy.PREPARED) {

@@ -12,6 +12,8 @@ public record IngredientStockSyncRow(
         Double totalStock,
         Double reorderLevel,
         String unitOfMeasure,
+        Long baseUnitId,
+        String baseUnitCode,
         Boolean isActive,
         Boolean isDeleted,
         LocalDateTime lastRestockedAt,

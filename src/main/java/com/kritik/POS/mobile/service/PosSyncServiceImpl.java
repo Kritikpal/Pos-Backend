@@ -604,6 +604,8 @@ public class PosSyncServiceImpl implements PosSyncService {
                 row.totalStock(),
                 row.reorderLevel(),
                 row.unitOfMeasure(),
+                row.baseUnitId(),
+                row.baseUnitCode(),
                 row.isActive(),
                 row.lastRestockedAt(),
                 row.updatedAt()
@@ -621,6 +623,8 @@ public class PosSyncServiceImpl implements PosSyncService {
                 row.totalStock(),
                 row.reorderLevel(),
                 row.unitOfMeasure(),
+                row.baseUnitId(),
+                row.baseUnitCode(),
                 row.isActive(),
                 row.lastRestockedAt(),
                 row.updatedAt()

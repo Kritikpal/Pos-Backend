@@ -17,11 +17,11 @@ import com.kritik.POS.restaurant.entity.MenuItem;
 import com.kritik.POS.restaurant.entity.enums.MenuType;
 import com.kritik.POS.restaurant.repository.MenuItemRepository;
 import com.kritik.POS.security.service.TenantAccessService;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -78,6 +78,7 @@ public class RecipeManagementServiceImpl implements RecipeManagementService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public RecipeManagementResponseDto getRecipe(Long id) {
         return RecipeManagementResponseDto.fromEntity(getAccessibleRecipeById(id));
     }

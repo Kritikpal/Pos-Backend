@@ -10,9 +10,12 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.Data;
+import lombok.ToString;
+import org.hibernate.Hibernate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 @Data
 @Entity
@@ -25,6 +28,7 @@ public class ConfiguredSaleItemSelection {
 
     @ManyToOne
     @JoinColumn(name = "configured_sale_item_id", nullable = false)
+    @ToString.Exclude
     private ConfiguredSaleItem configuredSaleItem;
 
     @Column(name = "slot_id", nullable = false)
@@ -66,5 +70,22 @@ public class ConfiguredSaleItemSelection {
     @jakarta.persistence.PreUpdate
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    @Override
+    public final boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || Hibernate.getClass(this) != Hibernate.getClass(o)) {
+            return false;
+        }
+        ConfiguredSaleItemSelection that = (ConfiguredSaleItemSelection) o;
+        return id != null && Objects.equals(id, that.id);
+    }
+
+    @Override
+    public final int hashCode() {
+        return Hibernate.getClass(this).hashCode();
     }
 }

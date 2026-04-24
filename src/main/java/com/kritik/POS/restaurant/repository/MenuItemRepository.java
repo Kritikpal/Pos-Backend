@@ -24,6 +24,7 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
     @EntityGraph(attributePaths = {
             "category",
             "itemPrice",
+            "baseUnit",
             "itemStock",
             "itemStock.supplier",
             "preparedItemStock",
@@ -47,55 +48,41 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                                         @Param("restaurantIds") Collection<Long> restaurantIds);
 
     @EntityGraph(attributePaths = {
+            "baseUnit",
             "itemStock",
             "preparedItemStock",
             "recipe",
             "ingredientUsages",
-            "ingredientUsages.ingredientStock"
+            "ingredientUsages.ingredientStock",
+            "ingredientUsages.ingredientStock.ingredient",
+            "ingredientUsages.ingredientStock.ingredient.baseUnit"
     })
     List<MenuItem> findAllByIdIn(Collection<Long> ids);
 
 
-    @Query("""
+    @Query(
+            value = """
             select m.id as id,
                    m.restaurantId as restaurantId,
                    s.sku as sku,
                    pf.url as productImage,
                    m.itemName as itemName,
-                   m.description as description,
+                   m.menuType as menuType,
+                   c.categoryId as categoryId,
+                   c.categoryName as categoryName,
                    ip.price as price,
-                   ip.disCount as discount,
-                   ip.priceIncludesTax as priceIncludesTax,
-                   m.taxClassId as taxClassId,
                    m.isAvailable as isAvailable,
                    m.isActive as isActive,
-                   m.isTrending as isTrending,
-                   m.menuType as menuType,
-                   case
-                       when m.menuType in (
-                           com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE,
-                           com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED
-                       ) then true
-                       else false
-                   end as recipeBased,
-                   recipe.batchSize as batchSize,
                    case
                        when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.CONFIGURABLE then null
-                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED then coalesce(
-                           (
-                               select floor(
-                                   case
-                                       when pi.active = false then 0
-                                       when (coalesce(pi.availableQty, 0) - coalesce(pi.reservedQty, 0)) <= 0 then 0
-                                       else (coalesce(pi.availableQty, 0) - coalesce(pi.reservedQty, 0))
-                                   end
-                               )
-                               from PreparedItemStock pi
-                               where pi.menuItemId = m.id
-                           ),
-                           0
-                       )
-                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE then coalesce(
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED then cast(floor(
+                           case
+                               when preparedStock.active = false then 0
+                               when (coalesce(preparedStock.availableQty, 0) - coalesce(preparedStock.reservedQty, 0)) <= 0 then 0
+                               else (coalesce(preparedStock.availableQty, 0) - coalesce(preparedStock.reservedQty, 0))
+                           end
+                       ) as integer)
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE then cast(coalesce(
                            (
                                select min(
                                    case
@@ -115,51 +102,22 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                                where mi.menuItem = m
                            ),
                            0
-                       )
+                       ) as integer)
                        else s.totalStock
                    end as totalStock,
                    case
                        when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.CONFIGURABLE then null
-                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED then null
-                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE then null
-                       else s.reorderLevel
-                   end as reorderLevel,
-                   case
-                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.CONFIGURABLE then null
-                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED then coalesce(
-                           (
-                               select pi.unitCode
-                               from PreparedItemStock pi
-                               where pi.menuItemId = m.id
-                           ),
-                           'serving'
-                       )
+                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED then coalesce(preparedStock.unitCode, 'serving')
                        when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE then 'serving'
                        else s.unitOfMeasure
                    end as unitOfMeasure,
-                   case
-                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.CONFIGURABLE then null
-                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED then null
-                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE then null
-                       else sup.supplierId
-                   end as supplierId,
-                   case
-                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.CONFIGURABLE then null
-                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.PREPARED then null
-                       when m.menuType = com.kritik.POS.restaurant.entity.enums.MenuType.RECIPE then null
-                       else sup.supplierName
-                   end as supplierName,
-                   c.categoryId as categoryId,
-                   c.categoryName as categoryName,
-                   m.createdAt as createdAt,
                    m.updatedAt as updatedAt
             from MenuItem m
             join m.category c
             left join m.itemPrice ip
             left join m.itemStock s
             left join m.productImage pf
-            left join m.recipe recipe
-            left join s.supplier sup
+            left join m.preparedItemStock preparedStock
             where m.isDeleted = false
               and (:skipRestaurantFilter = true or m.restaurantId in :restaurantIds)
               and (:isActive is null or m.isActive = :isActive)
@@ -167,10 +125,23 @@ public interface MenuItemRepository extends JpaRepository<MenuItem, Long>, JpaSp
                   coalesce(:search, '') = ''
                   or lower(m.itemName) like lower(concat('%', :search, '%'))
                   or lower(c.categoryName) like lower(concat('%', :search, '%'))
-                  or lower(coalesce(sup.supplierName, '')) like lower(concat('%', :search, '%'))
               )
-            order by m.isTrending desc, m.updatedAt desc, m.createdAt desc
-            """)
+            order by m.updatedAt desc, m.createdAt desc
+            """,
+            countQuery = """
+            select count(m)
+            from MenuItem m
+            join m.category c
+            where m.isDeleted = false
+              and (:skipRestaurantFilter = true or m.restaurantId in :restaurantIds)
+              and (:isActive is null or m.isActive = :isActive)
+              and (
+                  coalesce(:search, '') = ''
+                  or lower(m.itemName) like lower(concat('%', :search, '%'))
+                  or lower(c.categoryName) like lower(concat('%', :search, '%'))
+              )
+            """
+    )
     Page<MenuItemSummaryProjection> findMenuItemSummaries(@Param("skipRestaurantFilter") boolean skipRestaurantFilter,
                                                           @Param("restaurantIds") Collection<Long> restaurantIds,
                                                           @Param("isActive") Boolean isActive,

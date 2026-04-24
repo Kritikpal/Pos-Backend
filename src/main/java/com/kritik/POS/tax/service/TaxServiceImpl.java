@@ -7,6 +7,9 @@ import com.kritik.POS.restaurant.repository.RestaurantRepository;
 import com.kritik.POS.security.service.TenantAccessService;
 import com.kritik.POS.tax.dto.TaxClassRequest;
 import com.kritik.POS.tax.dto.TaxClassResponseDto;
+import com.kritik.POS.tax.dto.TaxCatalogSeedCountryResult;
+import com.kritik.POS.tax.dto.TaxCatalogSeedRequest;
+import com.kritik.POS.tax.dto.TaxCatalogSeedResponse;
 import com.kritik.POS.tax.dto.TaxDefinitionRequest;
 import com.kritik.POS.tax.dto.TaxDefinitionResponseDto;
 import com.kritik.POS.tax.dto.TaxRegistrationRequest;
@@ -20,6 +23,7 @@ import com.kritik.POS.tax.entity.TaxRule;
 import com.kritik.POS.tax.entity.enums.TaxCalculationMode;
 import com.kritik.POS.tax.entity.enums.TaxCompoundMode;
 import com.kritik.POS.tax.entity.enums.TaxDefinitionKind;
+import com.kritik.POS.tax.entity.enums.TaxSupplyScope;
 import com.kritik.POS.tax.entity.enums.TaxValueType;
 import com.kritik.POS.tax.model.AppliedTaxComponent;
 import com.kritik.POS.tax.model.TaxBuyerContext;
@@ -34,6 +38,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,6 +51,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -52,6 +59,8 @@ public class TaxServiceImpl implements TaxService {
 
     private static final String DEFAULT_TAX_CLASS_CODE = "STANDARD";
     private static final String DEFAULT_TAX_CLASS_NAME = "Standard Taxable";
+    private static final String INDIA_COUNTRY_CODE = "IN";
+    private static final String INDIA_DATASET_PREFIX = "IN_GST_FY";
 
     private final TaxClassRepository taxClassRepository;
     private final TaxDefinitionRepository taxDefinitionRepository;
@@ -111,6 +120,7 @@ public class TaxServiceImpl implements TaxService {
         entity.setValidTo(request.validTo());
         entity.setCountryCode(normalizeCodeNullable(request.countryCode()));
         entity.setRegionCode(normalizeCodeNullable(request.regionCode()));
+        entity.setSupplyScope(TaxSupplyScope.ANY);
         entity.setBuyerTaxCategory(trimToNull(request.buyerTaxCategory()));
         entity.setMinAmount(request.minAmount() == null ? null : MoneyUtils.money(request.minAmount()));
         entity.setMaxAmount(request.maxAmount() == null ? null : MoneyUtils.money(request.maxAmount()));
@@ -223,6 +233,294 @@ public class TaxServiceImpl implements TaxService {
     }
 
     @Override
+    @Transactional
+    public TaxCatalogSeedResponse seedTaxCatalog(TaxCatalogSeedRequest request) {
+        Long restaurantId = tenantAccessService.resolveManageableRestaurantId(request.restaurantId());
+        LocalDate effectiveFrom = request.effectiveFrom() == null ? currentIndianFinancialYearStart() : request.effectiveFrom();
+        boolean overwriteExisting = Boolean.TRUE.equals(request.overwriteExisting());
+
+        List<TaxCatalogSeedCountryResult> results = new ArrayList<>();
+        for (String requestedCountry : request.countries()) {
+            String countryCode = normalizeCountryInput(requestedCountry);
+            if (!INDIA_COUNTRY_CODE.equals(countryCode)) {
+                throw new AppException("Only India tax catalog seeding is supported right now", HttpStatus.BAD_REQUEST);
+            }
+            results.add(seedIndiaTaxCatalog(restaurantId, effectiveFrom, overwriteExisting));
+        }
+
+        return new TaxCatalogSeedResponse(restaurantId, results);
+    }
+
+    private TaxCatalogSeedCountryResult seedIndiaTaxCatalog(Long restaurantId,
+                                                            LocalDate effectiveFrom,
+                                                            boolean overwriteExisting) {
+        Restaurant restaurant = restaurantRepository.findByRestaurantIdAndIsDeletedFalse(restaurantId)
+                .orElseThrow(() -> new AppException("Invalid restaurant id", HttpStatus.BAD_REQUEST));
+        TaxRegistration existingRegistration = taxRegistrationRepository
+                .findFirstByRestaurantIdAndIsDefaultTrueAndIsActiveTrueOrderByIdAsc(restaurantId)
+                .orElse(null);
+        String sellerRegionCode = resolveSellerRegionCode(restaurant, existingRegistration);
+        String datasetCode = buildIndiaDatasetCode(effectiveFrom);
+        List<String> warnings = new ArrayList<>();
+        SeedCounter counter = new SeedCounter();
+
+        List<TaxClass> existingClasses = taxClassRepository.findAllByRestaurantIdAndIsDeletedFalse(restaurantId);
+        Map<String, TaxClass> classByCode = existingClasses.stream()
+                .collect(Collectors.toMap(entity -> normalizeCode(entity.getCode()), entity -> entity, (left, right) -> left, LinkedHashMap::new));
+
+        for (TaxClassSeed seed : buildIndiaTaxClassSeeds()) {
+            upsertTaxClassSeed(restaurantId, classByCode, seed, overwriteExisting, counter);
+        }
+
+        List<TaxDefinition> existingDefinitions = taxDefinitionRepository.findAllByRestaurantIdAndIsDeletedFalse(restaurantId);
+        Map<String, TaxDefinition> definitionByCode = existingDefinitions.stream()
+                .collect(Collectors.toMap(entity -> normalizeCode(entity.getCode()), entity -> entity, (left, right) -> left, LinkedHashMap::new));
+
+        for (TaxDefinitionSeed seed : buildIndiaTaxDefinitionSeeds()) {
+            upsertTaxDefinitionSeed(restaurantId, definitionByCode, seed, overwriteExisting, counter);
+        }
+
+        List<TaxRule> existingRules = taxRuleRepository.findAllByRestaurantIdAndIsDeletedFalse(restaurantId);
+        Map<String, TaxRule> ruleByKey = new LinkedHashMap<>();
+        for (TaxRule rule : existingRules) {
+            ruleByKey.put(ruleSeedKey(rule), rule);
+        }
+
+        for (TaxRuleSeed seed : buildIndiaTaxRuleSeeds(sellerRegionCode, effectiveFrom)) {
+            TaxClass taxClass = classByCode.get(seed.taxClassCode());
+            TaxDefinition definition = definitionByCode.get(seed.taxDefinitionCode());
+            if (taxClass == null || definition == null) {
+                continue;
+            }
+            upsertTaxRuleSeed(restaurantId, taxClass, definition, ruleByKey, seed, overwriteExisting, counter);
+        }
+
+        boolean hadDefaultRegistration = taxRegistrationRepository
+                .findFirstByRestaurantIdAndIsDefaultTrueAndIsActiveTrueOrderByIdAsc(restaurantId)
+                .isPresent();
+        TaxRegistration registration = ensureIndiaDefaultRegistration(restaurant, sellerRegionCode, warnings);
+        if (registration == null) {
+            warnings.add("Default GST registration was not created because the restaurant GST number is missing.");
+        } else {
+            counter.defaultRegistrationCreated = !hadDefaultRegistration;
+        }
+        if (sellerRegionCode == null) {
+            warnings.add("State/region could not be derived from restaurant state or GSTIN. Interstate GST rule matching will need a valid seller region.");
+        }
+        warnings.add("Compensation cess and state-specific non-GST taxes are not seeded by this API.");
+
+        return new TaxCatalogSeedCountryResult(
+                INDIA_COUNTRY_CODE,
+                datasetCode,
+                effectiveFrom,
+                counter.taxClassesCreated,
+                counter.taxClassesUpdated,
+                counter.taxDefinitionsCreated,
+                counter.taxDefinitionsUpdated,
+                counter.taxRulesCreated,
+                counter.taxRulesUpdated,
+                counter.defaultRegistrationCreated,
+                registration == null ? null : registration.getRegistrationNumber(),
+                warnings
+        );
+    }
+
+    private void upsertTaxClassSeed(Long restaurantId,
+                                    Map<String, TaxClass> classByCode,
+                                    TaxClassSeed seed,
+                                    boolean overwriteExisting,
+                                    SeedCounter counter) {
+        TaxClass entity = classByCode.get(seed.code());
+        if (entity == null) {
+            entity = new TaxClass();
+            entity.setRestaurantId(restaurantId);
+            entity.setCode(seed.code());
+            counter.taxClassesCreated++;
+        } else {
+            counter.taxClassesUpdated++;
+        }
+        if (entity.getDescription() == null || overwriteExisting) {
+            entity.setDescription(seed.description());
+        }
+        if (entity.getName() == null || overwriteExisting || DEFAULT_TAX_CLASS_CODE.equals(seed.code())) {
+            entity.setName(seed.name());
+        }
+        entity.setExempt(seed.exempt());
+        entity.setActive(true);
+        entity.setDeleted(false);
+        TaxClass saved = taxClassRepository.save(entity);
+        classByCode.put(normalizeCode(saved.getCode()), saved);
+    }
+
+    private void upsertTaxDefinitionSeed(Long restaurantId,
+                                         Map<String, TaxDefinition> definitionByCode,
+                                         TaxDefinitionSeed seed,
+                                         boolean overwriteExisting,
+                                         SeedCounter counter) {
+        TaxDefinition entity = definitionByCode.get(seed.code());
+        if (entity == null) {
+            entity = new TaxDefinition();
+            entity.setRestaurantId(restaurantId);
+            entity.setCode(seed.code());
+            counter.taxDefinitionsCreated++;
+        } else {
+            counter.taxDefinitionsUpdated++;
+        }
+        entity.setDisplayName(seed.displayName());
+        entity.setKind(seed.kind());
+        entity.setValueType(seed.valueType());
+        if (overwriteExisting || entity.getDefaultValue() == null || BigDecimal.ZERO.compareTo(entity.getDefaultValue()) == 0) {
+            entity.setDefaultValue(MoneyUtils.rate(seed.defaultValue()));
+        }
+        entity.setCurrencyCode("INR");
+        entity.setRecoverable(seed.recoverable());
+        entity.setActive(true);
+        entity.setDeleted(false);
+        TaxDefinition saved = taxDefinitionRepository.save(entity);
+        definitionByCode.put(normalizeCode(saved.getCode()), saved);
+    }
+
+    private void upsertTaxRuleSeed(Long restaurantId,
+                                   TaxClass taxClass,
+                                   TaxDefinition definition,
+                                   Map<String, TaxRule> ruleByKey,
+                                   TaxRuleSeed seed,
+                                   boolean overwriteExisting,
+                                   SeedCounter counter) {
+        String key = ruleSeedKey(
+                restaurantId,
+                definition.getId(),
+                taxClass.getId(),
+                seed.countryCode(),
+                seed.regionCode(),
+                seed.supplyScope(),
+                seed.sequenceNo()
+        );
+        TaxRule entity = ruleByKey.get(key);
+        if (entity == null) {
+            entity = new TaxRule();
+            entity.setRestaurantId(restaurantId);
+            entity.setTaxDefinitionId(definition.getId());
+            entity.setTaxClassId(taxClass.getId());
+            counter.taxRulesCreated++;
+        } else {
+            counter.taxRulesUpdated++;
+        }
+        entity.setCalculationMode(seed.calculationMode());
+        entity.setCompoundMode(seed.compoundMode());
+        entity.setSequenceNo(seed.sequenceNo());
+        if (overwriteExisting || entity.getValidFrom() == null) {
+            entity.setValidFrom(seed.validFrom());
+        }
+        entity.setValidTo(null);
+        entity.setCountryCode(seed.countryCode());
+        entity.setRegionCode(seed.regionCode());
+        entity.setSupplyScope(seed.supplyScope());
+        entity.setBuyerTaxCategory(null);
+        entity.setMinAmount(null);
+        entity.setMaxAmount(null);
+        entity.setPriority(seed.priority());
+        entity.setActive(true);
+        entity.setDeleted(false);
+        TaxRule saved = taxRuleRepository.save(entity);
+        ruleByKey.put(key, saved);
+    }
+
+    private TaxRegistration ensureIndiaDefaultRegistration(Restaurant restaurant,
+                                                           String sellerRegionCode,
+                                                           List<String> warnings) {
+        TaxRegistration existing = taxRegistrationRepository
+                .findFirstByRestaurantIdAndIsDefaultTrueAndIsActiveTrueOrderByIdAsc(restaurant.getRestaurantId())
+                .orElse(null);
+        if (existing != null) {
+            if (existing.getCountryCode() == null) {
+                existing.setCountryCode(INDIA_COUNTRY_CODE);
+            }
+            if (existing.getRegionCode() == null && sellerRegionCode != null) {
+                existing.setRegionCode(sellerRegionCode);
+            }
+            existing.setActive(true);
+            return taxRegistrationRepository.save(existing);
+        }
+        if (restaurant.getGstNumber() == null || restaurant.getGstNumber().isBlank()) {
+            return null;
+        }
+
+        TaxRegistration registration = new TaxRegistration();
+        registration.setRestaurantId(restaurant.getRestaurantId());
+        registration.setSchemeCode("GST");
+        registration.setRegistrationNumber(restaurant.getGstNumber().trim());
+        registration.setLegalName(restaurant.getName());
+        registration.setCountryCode(INDIA_COUNTRY_CODE);
+        registration.setRegionCode(sellerRegionCode);
+        registration.setPlaceOfBusiness(buildPlaceOfBusiness(restaurant));
+        registration.setDefault(true);
+        registration.setActive(true);
+        if (sellerRegionCode == null) {
+            warnings.add("Default GST registration was created, but its state code could not be normalized.");
+        }
+        return taxRegistrationRepository.save(registration);
+    }
+
+    private List<TaxClassSeed> buildIndiaTaxClassSeeds() {
+        return List.of(
+                new TaxClassSeed(DEFAULT_TAX_CLASS_CODE, "Standard Restaurant GST", "Default 5% GST class for restaurant service sold through the POS.", false),
+                new TaxClassSeed("GST_EXEMPT", "GST Exempt", "Exempt or nil-rated supplies under GST.", true),
+                new TaxClassSeed("GST_OUT_OF_SCOPE", "Out Of GST Scope", "Supplies outside GST, such as alcoholic liquor for human consumption.", true),
+                new TaxClassSeed("GST_5", "GST 5%", "General 5% GST class for taxable goods or services.", false),
+                new TaxClassSeed("GST_12", "GST 12%", "General 12% GST class for taxable goods or services.", false),
+                new TaxClassSeed("GST_18", "GST 18%", "General 18% GST class for taxable goods or services.", false),
+                new TaxClassSeed("GST_28", "GST 28%", "General 28% GST class for taxable goods or services.", false),
+                new TaxClassSeed("GST_RESTAURANT_PREMISES_18", "Restaurant 18% (Specified Premises)", "Restaurant service at specified premises taxable at 18%.", false)
+        );
+    }
+
+    private List<TaxDefinitionSeed> buildIndiaTaxDefinitionSeeds() {
+        return List.of(
+                new TaxDefinitionSeed("IN_RESTAURANT_CGST_2_5", "Restaurant CGST 2.5%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(2.5), false),
+                new TaxDefinitionSeed("IN_RESTAURANT_SGST_2_5", "Restaurant SGST 2.5%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(2.5), false),
+                new TaxDefinitionSeed("IN_RESTAURANT_IGST_5", "Restaurant IGST 5%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(5), false),
+                new TaxDefinitionSeed("IN_GST5_CGST_2_5", "GST 5% CGST 2.5%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(2.5), true),
+                new TaxDefinitionSeed("IN_GST5_SGST_2_5", "GST 5% SGST 2.5%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(2.5), true),
+                new TaxDefinitionSeed("IN_GST5_IGST_5", "GST 5% IGST 5%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(5), true),
+                new TaxDefinitionSeed("IN_GST12_CGST_6", "GST 12% CGST 6%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(6), true),
+                new TaxDefinitionSeed("IN_GST12_SGST_6", "GST 12% SGST 6%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(6), true),
+                new TaxDefinitionSeed("IN_GST12_IGST_12", "GST 12% IGST 12%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(12), true),
+                new TaxDefinitionSeed("IN_GST18_CGST_9", "GST 18% CGST 9%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(9), true),
+                new TaxDefinitionSeed("IN_GST18_SGST_9", "GST 18% SGST 9%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(9), true),
+                new TaxDefinitionSeed("IN_GST18_IGST_18", "GST 18% IGST 18%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(18), true),
+                new TaxDefinitionSeed("IN_GST28_CGST_14", "GST 28% CGST 14%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(14), true),
+                new TaxDefinitionSeed("IN_GST28_SGST_14", "GST 28% SGST 14%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(14), true),
+                new TaxDefinitionSeed("IN_GST28_IGST_28", "GST 28% IGST 28%", TaxDefinitionKind.TAX, TaxValueType.PERCENT, BigDecimal.valueOf(28), true)
+        );
+    }
+
+    private List<TaxRuleSeed> buildIndiaTaxRuleSeeds(String sellerRegionCode, LocalDate effectiveFrom) {
+        List<TaxRuleSeed> seeds = new ArrayList<>();
+        addIndiaRuleTriplet(seeds, DEFAULT_TAX_CLASS_CODE, "IN_RESTAURANT_CGST_2_5", "IN_RESTAURANT_SGST_2_5", "IN_RESTAURANT_IGST_5", sellerRegionCode, effectiveFrom);
+        addIndiaRuleTriplet(seeds, "GST_5", "IN_GST5_CGST_2_5", "IN_GST5_SGST_2_5", "IN_GST5_IGST_5", sellerRegionCode, effectiveFrom);
+        addIndiaRuleTriplet(seeds, "GST_12", "IN_GST12_CGST_6", "IN_GST12_SGST_6", "IN_GST12_IGST_12", sellerRegionCode, effectiveFrom);
+        addIndiaRuleTriplet(seeds, "GST_18", "IN_GST18_CGST_9", "IN_GST18_SGST_9", "IN_GST18_IGST_18", sellerRegionCode, effectiveFrom);
+        addIndiaRuleTriplet(seeds, "GST_28", "IN_GST28_CGST_14", "IN_GST28_SGST_14", "IN_GST28_IGST_28", sellerRegionCode, effectiveFrom);
+        addIndiaRuleTriplet(seeds, "GST_RESTAURANT_PREMISES_18", "IN_GST18_CGST_9", "IN_GST18_SGST_9", "IN_GST18_IGST_18", sellerRegionCode, effectiveFrom);
+        return seeds;
+    }
+
+    private void addIndiaRuleTriplet(List<TaxRuleSeed> seeds,
+                                     String taxClassCode,
+                                     String cgstDefinitionCode,
+                                     String sgstDefinitionCode,
+                                     String igstDefinitionCode,
+                                     String sellerRegionCode,
+                                     LocalDate effectiveFrom) {
+        if (sellerRegionCode != null) {
+            seeds.add(new TaxRuleSeed(taxClassCode, cgstDefinitionCode, INDIA_COUNTRY_CODE, sellerRegionCode, TaxSupplyScope.INTRA_STATE, effectiveFrom, 1, 100));
+            seeds.add(new TaxRuleSeed(taxClassCode, sgstDefinitionCode, INDIA_COUNTRY_CODE, sellerRegionCode, TaxSupplyScope.INTRA_STATE, effectiveFrom, 2, 100));
+        }
+        seeds.add(new TaxRuleSeed(taxClassCode, igstDefinitionCode, INDIA_COUNTRY_CODE, null, TaxSupplyScope.INTER_STATE, effectiveFrom, 1, 90));
+    }
+
+    @Override
     public TaxClass getOrCreateDefaultTaxClass(Long restaurantId) {
         Long accessibleRestaurantId = tenantAccessService.resolveAccessibleRestaurantId(restaurantId);
         return taxClassRepository.findByRestaurantIdAndCodeAndIsDeletedFalse(accessibleRestaurantId, DEFAULT_TAX_CLASS_CODE)
@@ -267,6 +565,12 @@ public class TaxServiceImpl implements TaxService {
 
         Long accessibleRestaurantId = tenantAccessService.resolveAccessibleRestaurantId(restaurantId);
         List<TaxRule> activeRules = taxRuleRepository.findActiveForRestaurant(accessibleRestaurantId);
+        TaxRegistration defaultRegistration = taxRegistrationRepository
+                .findFirstByRestaurantIdAndIsDefaultTrueAndIsActiveTrueOrderByIdAsc(accessibleRestaurantId)
+                .orElse(null);
+        Restaurant restaurant = restaurantRepository.findByRestaurantIdAndIsDeletedFalse(accessibleRestaurantId).orElse(null);
+        String sellerCountryCode = resolveSellerCountryCode(restaurant, defaultRegistration);
+        String sellerRegionCode = resolveSellerRegionCode(restaurant, defaultRegistration);
         Map<Long, TaxDefinition> definitionsById = taxDefinitionRepository.findAllByIdIn(
                         activeRules.stream().map(TaxRule::getTaxDefinitionId).collect(Collectors.toSet()))
                 .stream()
@@ -298,7 +602,7 @@ public class TaxServiceImpl implements TaxService {
             }
 
             List<RuleWithDefinition> matches = activeRules.stream()
-                    .filter(rule -> isRuleMatch(rule, taxClass, componentAmount, buyerContext))
+                    .filter(rule -> isRuleMatch(rule, taxClass, componentAmount, buyerContext, sellerCountryCode, sellerRegionCode))
                     .map(rule -> new RuleWithDefinition(rule, definitionsById.get(rule.getTaxDefinitionId())))
                     .filter(candidate -> candidate.definition() != null && candidate.definition().isActive() && !candidate.definition().isDeleted())
                     .sorted(Comparator
@@ -383,14 +687,15 @@ public class TaxServiceImpl implements TaxService {
         if (restaurant == null || restaurant.getGstNumber() == null || restaurant.getGstNumber().isBlank()) {
             return null;
         }
+        String sellerRegionCode = resolveSellerRegionCode(restaurant, null);
         TaxRegistration registration = new TaxRegistration();
         registration.setRestaurantId(restaurantId);
         registration.setSchemeCode("GST");
         registration.setRegistrationNumber(restaurant.getGstNumber().trim());
         registration.setLegalName(restaurant.getName());
-        registration.setCountryCode(normalizeCodeNullable(restaurant.getCountry()));
-        registration.setRegionCode(normalizeCodeNullable(restaurant.getState()));
-        registration.setPlaceOfBusiness(trimToNull(restaurant.getAddressLine1()));
+        registration.setCountryCode(resolveSellerCountryCode(restaurant, null));
+        registration.setRegionCode(sellerRegionCode);
+        registration.setPlaceOfBusiness(buildPlaceOfBusiness(restaurant));
         registration.setDefault(true);
         registration.setActive(true);
         return taxRegistrationRepository.save(registration);
@@ -409,7 +714,9 @@ public class TaxServiceImpl implements TaxService {
     private boolean isRuleMatch(TaxRule rule,
                                 TaxClass taxClass,
                                 BigDecimal componentAmount,
-                                TaxBuyerContext buyerContext) {
+                                TaxBuyerContext buyerContext,
+                                String sellerCountryCode,
+                                String sellerRegionCode) {
         if (rule.isDeleted() || !rule.isActive() || !Objects.equals(rule.getTaxClassId(), taxClass.getId())) {
             return false;
         }
@@ -420,23 +727,29 @@ public class TaxServiceImpl implements TaxService {
         if (rule.getValidTo() != null && today.isAfter(rule.getValidTo())) {
             return false;
         }
+        String supplyCountry = normalizeCountryCode(firstNonBlank(
+                buyerContext == null ? null : buyerContext.placeOfSupplyCountryCode(),
+                buyerContext == null ? null : buyerContext.buyerCountryCode()
+        ));
+        String supplyRegion = normalizeRegionCode(supplyCountry, firstNonBlank(
+                buyerContext == null ? null : buyerContext.placeOfSupplyRegionCode(),
+                buyerContext == null ? null : buyerContext.buyerRegionCode()
+        ));
+        String normalizedSellerCountry = normalizeCountryCode(sellerCountryCode);
+        String normalizedSellerRegion = normalizeRegionCode(normalizedSellerCountry, sellerRegionCode);
+
         if (rule.getCountryCode() != null) {
-            String supplyCountry = firstNonBlank(
-                    buyerContext == null ? null : buyerContext.placeOfSupplyCountryCode(),
-                    buyerContext == null ? null : buyerContext.buyerCountryCode()
-            );
-            if (!normalizeCode(rule.getCountryCode()).equals(normalizeCodeNullable(supplyCountry))) {
+            if (!normalizeCountryCode(rule.getCountryCode()).equals(supplyCountry)) {
                 return false;
             }
         }
         if (rule.getRegionCode() != null) {
-            String supplyRegion = firstNonBlank(
-                    buyerContext == null ? null : buyerContext.placeOfSupplyRegionCode(),
-                    buyerContext == null ? null : buyerContext.buyerRegionCode()
-            );
-            if (!normalizeCode(rule.getRegionCode()).equals(normalizeCodeNullable(supplyRegion))) {
+            if (!normalizeRegionCode(rule.getCountryCode(), rule.getRegionCode()).equals(supplyRegion)) {
                 return false;
             }
+        }
+        if (!matchesSupplyScope(rule.getSupplyScope(), normalizedSellerCountry, normalizedSellerRegion, supplyCountry, supplyRegion)) {
+            return false;
         }
         if (rule.getBuyerTaxCategory() != null) {
             String buyerCategory = buyerContext == null ? null : buyerContext.buyerTaxCategory();
@@ -617,6 +930,68 @@ public class TaxServiceImpl implements TaxService {
         return trimToNull(search);
     }
 
+    private String normalizeCountryInput(String country) {
+        String normalized = normalizeCountryCode(country);
+        if (normalized != null) {
+            return normalized;
+        }
+        throw new AppException("Invalid country code", HttpStatus.BAD_REQUEST);
+    }
+
+    private LocalDate currentIndianFinancialYearStart() {
+        LocalDate today = LocalDate.now();
+        return today.getMonthValue() >= 4
+                ? LocalDate.of(today.getYear(), 4, 1)
+                : LocalDate.of(today.getYear() - 1, 4, 1);
+    }
+
+    private String buildIndiaDatasetCode(LocalDate effectiveFrom) {
+        int startYear = effectiveFrom.getYear();
+        int endYear = (startYear + 1) % 100;
+        return INDIA_DATASET_PREFIX + startYear + "_" + String.format("%02d", endYear);
+    }
+
+    private String resolveSellerCountryCode(Restaurant restaurant, TaxRegistration registration) {
+        String registrationCountry = registration == null ? null : registration.getCountryCode();
+        String normalizedRegistrationCountry = normalizeCountryCode(registrationCountry);
+        if (normalizedRegistrationCountry != null) {
+            return normalizedRegistrationCountry;
+        }
+
+        String restaurantCountry = restaurant == null ? null : restaurant.getCountry();
+        String normalizedRestaurantCountry = normalizeCountryCode(restaurantCountry);
+        if (normalizedRestaurantCountry != null) {
+            return normalizedRestaurantCountry;
+        }
+
+        if (restaurant != null && trimToNull(restaurant.getGstNumber()) != null) {
+            return INDIA_COUNTRY_CODE;
+        }
+        return null;
+    }
+
+    private String resolveSellerRegionCode(Restaurant restaurant, TaxRegistration registration) {
+        String countryCode = resolveSellerCountryCode(restaurant, registration);
+        String registrationRegion = registration == null ? null : registration.getRegionCode();
+        String normalizedRegistrationRegion = normalizeRegionCode(countryCode, registrationRegion);
+        if (normalizedRegistrationRegion != null) {
+            return normalizedRegistrationRegion;
+        }
+
+        String restaurantRegion = restaurant == null ? null : restaurant.getState();
+        String normalizedRestaurantRegion = normalizeRegionCode(countryCode, restaurantRegion);
+        if (normalizedRestaurantRegion != null) {
+            return normalizedRestaurantRegion;
+        }
+
+        String gstNumber = restaurant == null ? null : trimToNull(restaurant.getGstNumber());
+        if (INDIA_COUNTRY_CODE.equals(countryCode) && gstNumber != null && gstNumber.length() >= 2) {
+            String stateCode = gstNumber.substring(0, 2);
+            return stateCode.chars().allMatch(Character::isDigit) ? stateCode : null;
+        }
+        return null;
+    }
+
     private String defaultCurrency(String currencyCode) {
         String normalized = trimToNull(currencyCode);
         return normalized == null ? "INR" : normalized.toUpperCase(Locale.ROOT);
@@ -629,6 +1004,79 @@ public class TaxServiceImpl implements TaxService {
     private String normalizeCodeNullable(String value) {
         String trimmed = trimToNull(value);
         return trimmed == null ? null : trimmed.toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeCountryCode(String value) {
+        String normalized = normalizeCodeNullable(value);
+        if (normalized == null) {
+            return null;
+        }
+        return switch (normalized) {
+            case "INDIA", "IN" -> INDIA_COUNTRY_CODE;
+            default -> normalized;
+        };
+    }
+
+    private String normalizeRegionCode(String countryCode, String value) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
+            return null;
+        }
+        String normalizedCountry = normalizeCountryCode(countryCode);
+        if (!INDIA_COUNTRY_CODE.equals(normalizedCountry)) {
+            return normalizeCode(trimmed);
+        }
+
+        String upper = trimmed.toUpperCase(Locale.ROOT);
+        if (upper.length() == 2 && upper.chars().allMatch(Character::isDigit)) {
+            return upper;
+        }
+
+        String canonical = upper
+                .replace('&', ' ')
+                .replaceAll("[^A-Z0-9]+", " ")
+                .trim()
+                .replaceAll("\\s+", " ");
+
+        return switch (canonical) {
+            case "JAMMU AND KASHMIR", "JAMMU KASHMIR" -> "01";
+            case "HIMACHAL PRADESH" -> "02";
+            case "PUNJAB" -> "03";
+            case "CHANDIGARH" -> "04";
+            case "UTTARAKHAND", "UTTRAKHAND" -> "05";
+            case "HARYANA" -> "06";
+            case "DELHI", "NEW DELHI", "NCT OF DELHI" -> "07";
+            case "RAJASTHAN" -> "08";
+            case "UTTAR PRADESH" -> "09";
+            case "BIHAR" -> "10";
+            case "SIKKIM" -> "11";
+            case "ARUNACHAL PRADESH" -> "12";
+            case "NAGALAND" -> "13";
+            case "MANIPUR" -> "14";
+            case "MIZORAM" -> "15";
+            case "TRIPURA" -> "16";
+            case "MEGHALAYA" -> "17";
+            case "ASSAM" -> "18";
+            case "WEST BENGAL" -> "19";
+            case "JHARKHAND" -> "20";
+            case "ODISHA", "ORISSA" -> "21";
+            case "CHHATTISGARH", "CHATTISGARH" -> "22";
+            case "MADHYA PRADESH" -> "23";
+            case "GUJARAT" -> "24";
+            case "DADRA AND NAGAR HAVELI AND DAMAN AND DIU", "DADRA AND NAGAR HAVELI", "DAMAN AND DIU", "DAMAN DIU" -> "26";
+            case "MAHARASHTRA", "MAHARASTRA" -> "27";
+            case "KARNATAKA" -> "29";
+            case "GOA" -> "30";
+            case "LAKSHADWEEP", "LAKSHADWEEP ISLANDS" -> "31";
+            case "KERALA" -> "32";
+            case "TAMIL NADU" -> "33";
+            case "PUDUCHERRY", "PONDICHERRY" -> "34";
+            case "ANDAMAN AND NICOBAR ISLANDS", "ANDAMAN NICOBAR", "ANDAMAN NICOBAR ISLANDS" -> "35";
+            case "TELANGANA" -> "36";
+            case "ANDHRA PRADESH" -> "37";
+            case "LADAKH" -> "38";
+            default -> normalizeCode(trimmed);
+        };
     }
 
     private String trimToNull(String value) {
@@ -644,6 +1092,75 @@ public class TaxServiceImpl implements TaxService {
         return resolvedFirst != null ? resolvedFirst : trimToNull(second);
     }
 
+    private boolean matchesSupplyScope(TaxSupplyScope supplyScope,
+                                       String sellerCountryCode,
+                                       String sellerRegionCode,
+                                       String supplyCountryCode,
+                                       String supplyRegionCode) {
+        if (supplyScope == null || supplyScope == TaxSupplyScope.ANY) {
+            return true;
+        }
+        if (sellerCountryCode == null || supplyCountryCode == null || sellerRegionCode == null || supplyRegionCode == null) {
+            return false;
+        }
+        boolean sameCountry = sellerCountryCode.equals(supplyCountryCode);
+        boolean sameRegion = sellerRegionCode.equals(supplyRegionCode);
+        return switch (supplyScope) {
+            case INTRA_STATE -> sameCountry && sameRegion;
+            case INTER_STATE -> sameCountry && !sameRegion;
+            case ANY -> true;
+        };
+    }
+
+    private String buildPlaceOfBusiness(Restaurant restaurant) {
+        StringBuilder builder = new StringBuilder();
+        appendPart(builder, restaurant.getAddressLine1());
+        appendPart(builder, restaurant.getAddressLine2());
+        appendPart(builder, restaurant.getCity());
+        appendPart(builder, restaurant.getState());
+        appendPart(builder, restaurant.getPincode());
+        return trimToNull(builder.toString());
+    }
+
+    private void appendPart(StringBuilder builder, String value) {
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
+            return;
+        }
+        if (builder.length() > 0) {
+            builder.append(", ");
+        }
+        builder.append(trimmed);
+    }
+
+    private String ruleSeedKey(TaxRule rule) {
+        return ruleSeedKey(
+                rule.getRestaurantId(),
+                rule.getTaxDefinitionId(),
+                rule.getTaxClassId(),
+                rule.getCountryCode(),
+                rule.getRegionCode(),
+                rule.getSupplyScope(),
+                rule.getSequenceNo()
+        );
+    }
+
+    private String ruleSeedKey(Long restaurantId,
+                               Long taxDefinitionId,
+                               Long taxClassId,
+                               String countryCode,
+                               String regionCode,
+                               TaxSupplyScope supplyScope,
+                               Integer sequenceNo) {
+        return restaurantId
+                + "|" + taxDefinitionId
+                + "|" + taxClassId
+                + "|" + normalizeCountryCode(countryCode)
+                + "|" + normalizeRegionCode(countryCode, regionCode)
+                + "|" + (supplyScope == null ? TaxSupplyScope.ANY.name() : supplyScope.name())
+                + "|" + sequenceNo;
+    }
+
     private record RuleWithDefinition(TaxRule rule, TaxDefinition definition) {
     }
 
@@ -652,5 +1169,43 @@ public class TaxServiceImpl implements TaxService {
                                       BigDecimal feeAmount,
                                       BigDecimal grandTotal,
                                       List<AppliedTaxComponent> appliedTaxes) {
+    }
+
+    private record TaxClassSeed(String code, String name, String description, boolean exempt) {
+    }
+
+    private record TaxDefinitionSeed(String code,
+                                     String displayName,
+                                     TaxDefinitionKind kind,
+                                     TaxValueType valueType,
+                                     BigDecimal defaultValue,
+                                     boolean recoverable) {
+    }
+
+    private record TaxRuleSeed(String taxClassCode,
+                               String taxDefinitionCode,
+                               String countryCode,
+                               String regionCode,
+                               TaxSupplyScope supplyScope,
+                               LocalDate validFrom,
+                               Integer sequenceNo,
+                               Integer priority) {
+        private TaxCalculationMode calculationMode() {
+            return TaxCalculationMode.EXCLUSIVE;
+        }
+
+        private TaxCompoundMode compoundMode() {
+            return TaxCompoundMode.BASE_ONLY;
+        }
+    }
+
+    private static final class SeedCounter {
+        private int taxClassesCreated;
+        private int taxClassesUpdated;
+        private int taxDefinitionsCreated;
+        private int taxDefinitionsUpdated;
+        private int taxRulesCreated;
+        private int taxRulesUpdated;
+        private boolean defaultRegistrationCreated;
     }
 }

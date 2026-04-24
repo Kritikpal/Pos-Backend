@@ -11,6 +11,8 @@ public record ItemStockSyncDto(
         Integer totalStock,
         Integer reorderLevel,
         String unitOfMeasure,
+        Long baseUnitId,
+        String baseUnitCode,
         Boolean isActive,
         LocalDateTime lastRestockedAt,
         LocalDateTime updatedAt
